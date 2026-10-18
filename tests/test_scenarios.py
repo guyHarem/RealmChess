@@ -1,5 +1,5 @@
 """
-The scenarios live in the frontend (cubechess-frontend/src/scenarios.json, written by
+The scenarios live in the frontend (realmchess-frontend/src/scenarios.json, written by
 tools/generate_scenarios.py). This re-checks every one against the engine: the position is
 legal, the stored solution works move by move, and it is the only solution.
 """
@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.join(ROOT, "tools"))
 from api.game_manager import GameManager  # noqa: E402
 from generate_scenarios import forced_mate_in_two, mating_moves  # noqa: E402
 
-SCENARIOS_PATH = os.path.join(ROOT, "cubechess-frontend", "src", "scenarios.json")
+SCENARIOS_PATH = os.path.join(ROOT, "realmchess-frontend", "src", "scenarios.json")
 
 
 def pair(move):

@@ -1,7 +1,7 @@
 """
 Run the game for real visitors: one program serving the built pages and the API.
 
-    npm --prefix cubechess-frontend run build     # once, and after every change to the pages
+    npm --prefix realmchess-frontend run build     # once, and after every change to the pages
     venv/bin/python serve.py                       # then open http://localhost:8000
 
 Settings (environment variables):
@@ -53,7 +53,7 @@ if __name__ == "__main__":
     from api.app import app
 
     if not os.path.isfile(os.path.join(app.config["DIST"], "index.html")):
-        raise SystemExit("The pages are not built yet. Run: npm --prefix cubechess-frontend run build")
+        raise SystemExit("The pages are not built yet. Run: npm --prefix realmchess-frontend run build")
 
     start(os.environ.get("HOST", "0.0.0.0"), int(os.environ.get("PORT", 8000)),
           thinkers=int(os.environ.get("REALMCHESS_THINKERS", 0)))

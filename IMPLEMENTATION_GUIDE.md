@@ -16,7 +16,7 @@
 ## Part 1: Engine (COMPLETED ✅)
 
 ### Location
-- `/Users/guyharem/Projects/CubeChess/engine/`
+- `/Users/guyharem/Projects/RealmChess/engine/`
 
 ### Files
 - `pieces.py` — All piece movement rules (Pawn, Rook, Knight, Bishop, Queen, King, Rock)
@@ -84,7 +84,7 @@ Wrap the chess engine in a REST API so frontend can call it via HTTP.
 
 ### File Structure
 ```
-CubeChess/
+RealmChess/
 ├── engine/              # (existing)
 │   ├── pieces.py
 │   ├── board.py
@@ -374,7 +374,7 @@ python api/app.py  # Runs on http://localhost:5000
 
 ### Terminal 2: Frontend
 ```bash
-cd /Users/guyharem/Projects/CubeChess/frontend
+cd /Users/guyharem/Projects/RealmChess/frontend
 npm install
 npm run dev  # Runs on http://localhost:5173 (Vite default)
 ```

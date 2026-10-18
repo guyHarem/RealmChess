@@ -29,7 +29,7 @@ app = Flask(__name__, static_folder=None)
 app.config.update(
     PRODUCTION=PRODUCTION,
     MAX_CONTENT_LENGTH=64 * 1024,                                    # no request needs more
-    DIST=os.path.join(ROOT, "cubechess-frontend", "dist"),            # the built pages (npm run build)
+    DIST=os.path.join(ROOT, "realmchess-frontend", "dist"),            # the built pages (npm run build)
 )
 if not PRODUCTION:
     CORS(app)   # the dev pages come from another port; hosted, pages and API share one address
@@ -404,13 +404,13 @@ def health():
 @app.route('/', defaults={"path": "index.html"})
 @app.route('/<path:path>')
 def pages(path):
-    """The built frontend (cubechess-frontend/dist), so one program serves pages and API.
+    """The built frontend (realmchess-frontend/dist), so one program serves pages and API.
     In development the pages come from the Vite dev server instead."""
     if path.startswith('api/'):
         return refuse("No such endpoint", 404)
     dist = app.config["DIST"]
     if not os.path.isfile(os.path.join(dist, "index.html")):
-        return refuse("The pages are not built. Run: npm --prefix cubechess-frontend run build", 404)
+        return refuse("The pages are not built. Run: npm --prefix realmchess-frontend run build", 404)
     response = send_from_directory(dist, path)
     if path.startswith('assets/'):
         # Built files carry a fingerprint in their name, so they never change

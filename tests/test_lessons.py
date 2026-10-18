@@ -1,5 +1,5 @@
 """
-The lessons live in the frontend (cubechess-frontend/src/lessons.json). This checks every
+The lessons live in the frontend (realmchess-frontend/src/lessons.json). This checks every
 task against the real engine, so a lesson can never ask for a move the game would refuse.
 """
 import json
@@ -8,7 +8,7 @@ import unittest
 from api.game_manager import GameManager
 
 LESSONS_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                            "cubechess-frontend", "src", "lessons.json")
+                            "realmchess-frontend", "src", "lessons.json")
 
 
 class TestLessons(unittest.TestCase):

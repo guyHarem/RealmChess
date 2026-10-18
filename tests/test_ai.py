@@ -1,7 +1,7 @@
 """
 The computer player: does it find what it should, at every level, within its limits?
 
-The puzzles in cubechess-frontend/src/scenarios.json each have exactly one solution, so they
+The puzzles in realmchess-frontend/src/scenarios.json each have exactly one solution, so they
 make a ready-made exam: the hard level must solve all of them.
 """
 import json
@@ -21,7 +21,7 @@ from engine.pieces import King, Queen, Rook, Knight, Pawn
 from tests.test_fast_board import state_of
 
 SCENARIOS_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                              "cubechess-frontend", "src", "scenarios.json")
+                              "realmchess-frontend", "src", "scenarios.json")
 
 
 def position(placed, current_player="white", size=8, z_min=-2, z_max=2):

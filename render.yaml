@@ -24,8 +24,8 @@ services:
     autoDeployTrigger: commit
     buildCommand: >-
       pip install -r requirements.txt &&
-      npm --prefix cubechess-frontend ci --include=dev &&
-      npm --prefix cubechess-frontend run build
+      npm --prefix realmchess-frontend ci --include=dev &&
+      npm --prefix realmchess-frontend run build
     startCommand: python serve.py     # listens on the PORT Render gives it
     healthCheckPath: /api/health
     envVars:

@@ -98,7 +98,7 @@ Rocks are offset to create a vertical "zig-zag" effect, meaning a piece cannot d
 The codebase must enforce a **strict separation of concerns** between the Game Logic (Core Engine) and the Graphical User Interface (UI).
 
 ```text
-cubechess/
+realmchess/
 │
 ├── engine/                  # Pure Python Game Logic (Zero GUI dependencies)
 │   ├── __init__.py

@@ -2,7 +2,7 @@
 Finds checkmate puzzles for the scenario player by trial: build a random position, and keep
 it only if White has exactly one way to force mate in the asked number of moves.
 
-    python tools/generate_scenarios.py            # regenerate cubechess-frontend/src/scenarios.json
+    python tools/generate_scenarios.py            # regenerate realmchess-frontend/src/scenarios.json
 
 Every puzzle it writes is re-checked by tests/test_scenarios.py.
 """
@@ -19,7 +19,7 @@ sys.path.insert(0, ROOT)
 from engine.game_state import GameState  # noqa: E402
 from engine.pieces import King, Queen, Rook, Bishop, Knight, Pawn, Rock  # noqa: E402
 
-OUT = os.path.join(ROOT, "cubechess-frontend", "src", "scenarios.json")
+OUT = os.path.join(ROOT, "realmchess-frontend", "src", "scenarios.json")
 SMALL = {"size": 5, "z_min": -1, "z_max": 1}
 FULL = {"size": 8, "z_min": -2, "z_max": 2}
 CLASSES = {"Queen": Queen, "Rook": Rook, "Bishop": Bishop, "Knight": Knight, "Pawn": Pawn}

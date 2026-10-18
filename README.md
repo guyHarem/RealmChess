@@ -2,8 +2,7 @@
 
 A 3D chess variant on five stacked 8×8 boards. This is a **work in progress (WIP)**.
 
-It was called CubeChess until October 2026; the folders (`CubeChess/`, `cubechess-frontend/`)
-keep the old name. The site will be at [realmchess.com](https://realmchess.com).
+It was called CubeChess until October 2026. The site will be at [realmchess.com](https://realmchess.com).
 
 ## Project Status: Phase 1 Complete ✅
 
@@ -28,8 +27,8 @@ keep the old name. The site will be at [realmchess.com](https://realmchess.com).
 - ✅ Home page, game setup and the game screen (local two-player)
 - ✅ Three.js 3D board: cube-shaped cells, 3D pieces, layer tools, camera controls
 - ✅ Move list, captured material, chess clock with increment, undo, resign and draw by agreement
-- ✅ Lesson player: nine lessons on a 5×5 three-layer board (`cubechess-frontend/src/lessons.json`)
-- ✅ Scenario player: 32 checkmate puzzles in four tiers (`cubechess-frontend/src/scenarios.json`)
+- ✅ Lesson player: nine lessons on a 5×5 three-layer board (`realmchess-frontend/src/lessons.json`)
+- ✅ Scenario player: 32 checkmate puzzles in four tiers (`realmchess-frontend/src/scenarios.json`)
 - ✅ Play against the computer (easy, medium, hard), with the last move marked on the board
 - ✅ Online play with a link: seats without accounts, draw and take-back offers, watching
 - ✅ Phone layout: the game, lessons and puzzles fit one upright phone screen (3D board on top,
@@ -90,7 +89,7 @@ python -m unittest discover -s tests
 
 ### Frontend
 ```bash
-cd cubechess-frontend
+cd realmchess-frontend
 npm install
 npm run dev
 # App runs on http://localhost:5173 (Vite picks the next free port if that one is taken)
@@ -102,7 +101,7 @@ Everything above is for your own machine. To run the game for real visitors ther
 way to start it, which can be tried locally:
 
 ```bash
-npm --prefix cubechess-frontend run build     # once, and after every change to the pages
+npm --prefix realmchess-frontend run build     # once, and after every change to the pages
 venv/bin/python serve.py                       # then open http://localhost:8000
 ```
 
@@ -324,7 +323,7 @@ Undoing a promotion takes back the pawn move as well.
 ## Project Structure
 
 ```
-CubeChess/
+RealmChess/
 ├── engine/                 # Game engine (Python)
 │   ├── pieces.py          # Piece classes & movement rules
 │   ├── board.py           # Board storage & operations
@@ -343,7 +342,7 @@ CubeChess/
 │   ├── thinker.py        # Runs the computer's thinking in worker processes
 │   ├── limits.py         # Per-visitor limits for the hosted game
 │   └── utils.py          # JSON serialization
-├── cubechess-frontend/    # React + Vite + Three.js frontend
+├── realmchess-frontend/    # React + Vite + Three.js frontend
 │   ├── src/
 │   │   ├── pages/        # Home, Setup, Game
 │   │   ├── components/   # CubeBoard (3D), LayerMap, MoveList, PlayerCard...

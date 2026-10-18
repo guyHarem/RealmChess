@@ -1,13 +1,13 @@
-// The "three worlds" cube: ground on top, sky on the left, abyss on the right
+// The castle rook in five floors, one per layer: Space, Sky, Ground, Dungeon, Abyss
 
 export function LogoMark({ size = 34 }) {
   return (
     <svg viewBox="0 0 100 100" width={size} height={size} aria-hidden="true">
-      <polygon points="50,8 86,29 50,50 14,29" fill="#C4EBB9" />
-      <polygon points="50,8 68,18.5 50,29 32,18.5" fill="#86CF7A" />
-      <polygon points="50,29 68,39.5 50,50 32,39.5" fill="#86CF7A" />
-      <polygon points="14,29 50,50 50,92 14,71" fill="#7EC3F2" />
-      <polygon points="50,50 86,29 86,71 50,92" fill="#6B4FB8" />
+      <path d="M22 10h13v10h8V10h14v10h8V10h13v14H22Z" fill="#4A78D6" />
+      <path d="M22 27h56v5l-9 8v1H31v-1l-9-8Z" fill="#7EC3F2" />
+      <path d="M31 44h38v14H31Z" fill="#86CF7A" />
+      <path d="M31 61h38v11l3.375 3h-44.75L31 72Z" fill="#B49AE8" />
+      <path d="M24.25 78h51.5L78 80v12H22V80Z" fill="#6B4FB8" />
     </svg>
   )
 }

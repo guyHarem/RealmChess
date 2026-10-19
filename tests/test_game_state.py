@@ -181,7 +181,7 @@ class TestKingCaptures(unittest.TestCase):
 
 
 class TestStartingArmy(unittest.TestCase):
-    def test_extra_knights_below_and_bishops_above(self):
+    def test_extra_knights_below_bishops_above_and_pawns_at_the_edges(self):
         game = GameState()
         for color, rank in (("white", 0), ("black", 7)):
             for x in (1, 6):
@@ -192,7 +192,14 @@ class TestStartingArmy(unittest.TestCase):
                 piece = game.board.get_piece((x, rank, 1))
                 self.assertIsInstance(piece, Bishop)
                 self.assertEqual(piece.color, color)
-            self.assertEqual(len(game.get_all_pieces_of_color(color)), 20)
+            pawn_rank = 1 if color == "white" else 6
+            for x in (1, 6):
+                for z in (2, -2):
+                    piece = game.board.get_piece((x, pawn_rank, z))
+                    self.assertIsInstance(piece, Pawn)
+                    self.assertEqual(piece.color, color)
+                    self.assertFalse(piece.has_moved)
+            self.assertEqual(len(game.get_all_pieces_of_color(color)), 24)
 
     def test_nothing_is_attacked_before_the_first_move(self):
         game = GameState()
@@ -201,7 +208,7 @@ class TestStartingArmy(unittest.TestCase):
                 self.assertFalse(game.is_square_under_attack(coord, enemy), f"{piece} on {coord}")
         moves = [(coord, move) for coord, _ in game.get_all_pieces_of_color("white")
                  for move in game.get_legal_moves(coord)]
-        self.assertEqual(len(moves), 145)
+        self.assertEqual(len(moves), 157)
         self.assertTrue(all(game.board.get_piece(move) is None for _, move in moves))
 
     def test_the_new_pieces_can_move_at_once(self):

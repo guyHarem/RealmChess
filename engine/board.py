@@ -1,6 +1,10 @@
 from engine.pieces import King, Queen, Rook, Bishop, Knight, Pawn, Rock
 X, Y, Z = 0, 1, 2
 
+# Off the Ground, pawns start in Space (z=2) and the Abyss (z=-2) on these files, (x, z)
+EXTRA_PAWN_SQUARES = [(1, 2), (6, 2), (1, -2), (6, -2)]
+ARMY_SIZE = 24   # pieces each side starts with on the full board
+
 class Board:
     def __init__(self, size=8, z_min=-2, z_max=2):
         # size x size squares per layer, layers z_min..z_max (the Ground is z=0)
@@ -89,6 +93,11 @@ class Board:
         for x in (2, 5):
             self.board[(x,0,1)] = Bishop("white")
             self.board[(x,7,1)] = Bishop("black")
+
+        ## Two pawns each in Space and in the Abyss, on the b and g files: clear of the rocks
+        for x, z in EXTRA_PAWN_SQUARES:
+            self.board[(x,1,z)] = Pawn("white")
+            self.board[(x,6,z)] = Pawn("black")
                       
     def init_rocks(self):
         # Layer -1: Hourglass

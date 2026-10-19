@@ -31,7 +31,7 @@ class TestApi(unittest.TestCase):
         self.assertIsNone(data["pending_promotion"])
         self.assertEqual(data["board"]["[4, 0, 0]"], "King(white)")
         self.assertEqual(data["board"]["[2, 2, -1]"], "Rock")
-        self.assertEqual(len(data["board"]), 40 + 16)
+        self.assertEqual(len(data["board"]), 48 + 16)
 
     def test_draw_by_repetition_is_reported(self):
         dance = [([1, 0, 0], [2, 2, 0]), ([1, 7, 0], [2, 5, 0]), ([2, 2, 0], [1, 0, 0]), ([2, 5, 0], [1, 7, 0])]
@@ -101,12 +101,12 @@ class TestApi(unittest.TestCase):
 
     def test_new_game_options(self):
         data = self.client.post('/api/game/new', json={"rocks": False, "move_limit": 30}).get_json()
-        self.assertEqual(len(data["board"]), 40)
+        self.assertEqual(len(data["board"]), 48)
         self.assertEqual(data["move_limit"], 30)
         self.assertEqual(self.client.post('/api/game/new', json={"move_limit": 0}).status_code, 400)
         self.assertEqual(self.client.post('/api/game/new', json={"move_limit": "x"}).status_code, 400)
         data = self.client.post('/api/game/new').get_json()
-        self.assertEqual((len(data["board"]), data["move_limit"]), (56, 50))
+        self.assertEqual((len(data["board"]), data["move_limit"]), (64, 50))
 
     def test_history_marks_check(self):
         # 1. f3 e5 2. g4 Qh4: mate in 2D chess, but here the king can step up a layer, so only check

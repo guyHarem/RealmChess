@@ -105,7 +105,7 @@ class FastBoardTestCase(unittest.TestCase):
 class TestAgainstTheEngine(FastBoardTestCase):
     def test_starting_position(self):
         moves = self.assert_same_position(GameState(), "start")
-        self.assertEqual(len(moves), 145)
+        self.assertEqual(len(moves), 157)
 
     def test_random_games_from_the_starting_position(self):
         for seed in range(4):

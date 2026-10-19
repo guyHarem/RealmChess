@@ -56,7 +56,8 @@ It was called CubeChess until October 2026. The site will be at [realmchess.com]
 **Two-Axis Rule:** No piece moves all 3 axes simultaneously (except Pawn captures in 3D context)
 
 **Starting position:** ordinary chess on the Ground, plus two knights each in the Dungeon (under
-b and g) and two bishops each in the Sky (above c and f): 20 pieces a side.
+b and g), two bishops each in the Sky (above c and f), and two pawns each in Space and in the
+Abyss (on b and g, the files clear of the Abyss rocks): 24 pieces a side.
 
 **King:** steps like a chess king on its layer, or one cell straight up or down. One cell
 sideways together with one layer up or down it cannot step, but it can capture there, so a

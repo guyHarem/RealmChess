@@ -150,9 +150,11 @@ export const START_BOARD = makeBoard(
     ...BACK_RANK.flatMap((type, x) => [
       [type, 'white', x, 0, 0], ['Pawn', 'white', x, 1, 0], ['Pawn', 'black', x, 6, 0], [type, 'black', x, 7, 0],
     ]),
-    // Two knights each in the Dungeon and two bishops each in the Sky
+    // Two knights each in the Dungeon, two bishops each in the Sky
     ...[1, 6].flatMap((x) => [['Knight', 'white', x, 0, -1], ['Knight', 'black', x, 7, -1]]),
     ...[2, 5].flatMap((x) => [['Bishop', 'white', x, 0, 1], ['Bishop', 'black', x, 7, 1]]),
+    // Two pawns each in Space and in the Abyss, on the b and g files
+    ...[[1, 2], [6, 2], [1, -2], [6, -2]].flatMap(([x, z]) => [['Pawn', 'white', x, 1, z], ['Pawn', 'black', x, 6, z]]),
   ],
   ROCKS,
 )

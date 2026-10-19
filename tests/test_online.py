@@ -83,7 +83,7 @@ class TestRooms(OnlineTestCase):
 
     def test_options_reach_the_new_game(self):
         data = self.open(kind="local", rocks=False, move_limit=30, clock={"initial": 60, "increment": 2}).get_json()
-        self.assertEqual((len(data["board"]), data["move_limit"], data["clock"]["initial"]), (40, 30, 60))
+        self.assertEqual((len(data["board"]), data["move_limit"], data["clock"]["initial"]), (48, 30, 60))
 
     def test_computer_game(self):
         data = self.open(kind="computer", computer={"color": "black", "level": "easy"}).get_json()

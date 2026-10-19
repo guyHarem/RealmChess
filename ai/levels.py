@@ -14,6 +14,7 @@ import random
 
 from ai.board import FastBoard
 from ai.search import Search, MATE_BOUND
+from engine.board import ARMY_SIZE
 
 LEVELS = {
     "easy": {"depth": 1, "seconds": None, "margin": 150, "quiescence": 0},
@@ -55,7 +56,7 @@ def choose_move(game, level="hard", seconds=None, rng=None, nodes=None, params=N
     rng = rng or random
     board = FastBoard.from_game_state(game, params)
     margin = settings["margin"]
-    full_armies = len(board.squares[0]) == 20 and len(board.squares[1]) == 20
+    full_armies = len(board.squares[0]) == ARMY_SIZE and len(board.squares[1]) == ARMY_SIZE
     if level == "hard" and full_armies and len(board.history) < OPENING_PLIES:
         margin = OPENING_MARGIN
 

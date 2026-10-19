@@ -6,6 +6,7 @@ import time
 from ai.levels import LEVELS, accepts_draw, think_time
 from api.clock import ChessClock
 from api.thinker import Busy, think
+from engine.board import EXTRA_PAWN_SQUARES
 from engine.game_state import GameState
 from engine.pieces import King, Queen, Rook, Bishop, Knight, Pawn, Rock
 
@@ -385,7 +386,8 @@ class GameManager:
         home_rank = 0 if color == "white" else size - 1
         pawn_rank = 1 if color == "white" else size - 2
         if isinstance(piece, Pawn):
-            piece.has_moved = not (y == pawn_rank and z == 0)
+            start_layer = z == 0 or (size == 8 and (x, z) in EXTRA_PAWN_SQUARES)
+            piece.has_moved = not (y == pawn_rank and start_layer)
         elif isinstance(piece, King):
             piece.has_moved = size != 8 or (x, y, z) != (4, home_rank, 0)
         elif isinstance(piece, Rook):

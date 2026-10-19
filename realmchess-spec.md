@@ -17,7 +17,8 @@ Every position on the board is represented as a 3D tuple: `(x, y, z)` where:
 ### Starting position
 The Ground holds the ordinary chess starting position. Each player also has two **Knights in the
 Dungeon** (under the b and g files of their back rank) and two **Bishops in the Sky** (above the
-c and f files), so 20 pieces a side.
+c and f files), and two **Pawns in Space** and two **Pawns in the Abyss** (on the b and g files
+of their pawn rank, clear of the Abyss rocks), so 24 pieces a side.
 
 ### Square colors
 The checkered pattern shifts by one square on every other layer: a cell is dark when

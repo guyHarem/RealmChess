@@ -4,6 +4,7 @@ Provides HTTP endpoints for game management.
 """
 
 import json
+import mimetypes
 import os
 import sys
 
@@ -20,6 +21,7 @@ from api.utils import convert_response
 from engine.pieces import Queen, Rook, Bishop, Knight
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+mimetypes.add_type("application/manifest+json", ".webmanifest")   # not every system knows it
 
 # Two modes. On your own machine (the default) everything is open: the developer test bench,
 # the shared "main" room, position editing, requests from the Vite dev server. Hosted for

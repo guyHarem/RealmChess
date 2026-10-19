@@ -179,6 +179,7 @@ class TestPages(unittest.TestCase):
         app.config["DIST"] = self.folder.name
         os.mkdir(os.path.join(self.folder.name, "assets"))
         for name, text in (("index.html", "<!doctype html><title>game</title>"), ("favicon.svg", "<svg/>"),
+                           ("manifest.webmanifest", '{"name": "RealmChess"}'),
                            (os.path.join("assets", "index-abc123.js"), "console.log(1)")):
             with open(os.path.join(self.folder.name, name), "w") as f:
                 f.write(text)
@@ -193,6 +194,10 @@ class TestPages(unittest.TestCase):
             self.assertEqual((res.status_code, res.mimetype), (200, "text/html"))
             self.assertIn(b"<title>game</title>", res.data)
             self.assertEqual(res.headers["Cache-Control"], "no-cache")   # always the newest build
+
+    def test_the_web_app_manifest_has_its_own_type(self):
+        with self.client.get('/manifest.webmanifest') as res:
+            self.assertEqual((res.status_code, res.mimetype), (200, "application/manifest+json"))
 
     def test_built_files_are_cached_for_good(self):
         with self.client.get('/assets/index-abc123.js') as res:

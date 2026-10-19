@@ -13,6 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from flask import Flask, request, jsonify, g, send_from_directory
 from flask_cors import CORS
 from werkzeug.middleware.proxy_fix import ProxyFix
+from api.handoff import Arrival, key_matches
 from api.limits import Limiter, Slots
 from api.rooms import Rooms
 from api.utils import convert_response
@@ -71,15 +72,25 @@ game_manager = rooms.get("main").manager
 practice_manager = rooms.get("practice").manager
 
 
+# Games handed over by the previous server on a deploy (api/handoff.py)
+arrival = Arrival()
+
+
 @app.before_request
 def choose_game():
     if not request.path.startswith('/api/'):
         return None   # a page or one of its files
+    if request.path == '/api/handoff':
+        return None   # the previous server, which has its own key
     if hosted() and not limits["requests"].allow(visitor()):
         return too_many()
     if request.path in ('/api/games', '/api/health'):
         return None
-    room = rooms.get(request.args.get("game", "main"))
+    room_id = request.args.get("game", "main")
+    room = rooms.get(room_id)
+    if room is None:
+        arrival.wait()   # just after a deploy, the game may still be on its way here
+        room = rooms.get(room_id)
     if room is None or (hosted() and room.permanent):
         return jsonify({"success": False, "gone": True, "error": "This game no longer exists"}), 404
     g.room = room
@@ -387,6 +398,20 @@ def no_sandbox_online():
         if hosted() and g.room.kind != "practice":
             return refuse("That is not available here")
     return None
+
+
+# ==================== HANDOVER ON A DEPLOY ====================
+
+@app.route('/api/handoff', methods=['POST'])
+def take_handoff():
+    """The previous server sends its games here as it stops (see api/handoff.py). Body:
+    {"rooms": [...], "done": true on the last batch}. Needs the shared key."""
+    if not key_matches(request.headers.get("X-Handoff-Key")):
+        return refuse("No such endpoint", 404)
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or not isinstance(data.get("rooms"), list):
+        return refuse("Expected {\"rooms\": [...]}")
+    return jsonify({"success": True, "restored": arrival.take(rooms, data, log=app.logger.warning)})
 
 
 # ==================== THE PAGES ====================

@@ -14,8 +14,12 @@ Settings (environment variables):
                             end of X-Forwarded-For. Check it at /api/health, which shows the
                             address the server takes you for
 
+    REALMCHESS_HANDOFF_KEY   a shared secret that lets a stopping server hand its games to the
+                            one replacing it (see api/handoff.py); without it they are lost
+    REALMCHESS_HANDOFF_URL   where to hand them (default RENDER_EXTERNAL_URL, set by Render)
+
 The server is a single process on purpose: games live in its memory, so two processes would
-each have their own set. Restarting it ends the games in progress.
+each have their own set. On a deploy they are handed to the new server; a crash ends them.
 """
 import os
 import signal
@@ -27,6 +31,7 @@ def start(host, port, thinkers=None):
     """Serve pages and API until the program is told to stop"""
     from waitress import serve
 
+    from api import handoff
     from api.app import app, rooms
     from api.thinker import ProcessThinker, default_workers
 
@@ -36,6 +41,11 @@ def start(host, port, thinkers=None):
     thinker.warm_up()
 
     def stop(*_):
+        # A deploy: the new server already has the visitors; give it the games (api/handoff.py)
+        try:
+            handoff.send(rooms)
+        except Exception as e:   # never let a failed handover keep the server from stopping
+            print(f"handoff: {e}", flush=True)
         raise SystemExit(0)
     signal.signal(signal.SIGTERM, stop)   # how a host stops the server; waitress then winds down
 

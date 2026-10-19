@@ -161,15 +161,26 @@ class Rooms:
         for room in self._rooms.values():
             room.manager._think = thinker
 
-    def create(self, kind):
+    def all(self):
+        return list(self._rooms.values())
+
+    def remove(self, room_id):
+        self._rooms.pop(room_id, None)
+
+    def create(self, kind, room_id=None):
+        """A new room. room_id is only given for a game handed over from the previous server."""
         if kind not in KINDS:
             raise ValueError(f"kind must be one of: {', '.join(KINDS)}")
         self.sweep()
         if len(self._rooms) >= MAX_ROOMS:
             raise ValueError("The server is full. Try again later.")
-        room_id = secrets.token_urlsafe(6)
-        while room_id in self._rooms:
+        if room_id is not None:
+            if not isinstance(room_id, str) or not 1 <= len(room_id) <= 16 or room_id in self._rooms:
+                raise ValueError("That game id cannot be used")
+        else:
             room_id = secrets.token_urlsafe(6)
+            while room_id in self._rooms:
+                room_id = secrets.token_urlsafe(6)
         manager = GameManager()
         if self.thinker is not None:
             manager._think = self.thinker

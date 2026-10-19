@@ -18,9 +18,8 @@ services:
     region: frankfurt        # cannot be changed later: oregon, ohio, virginia, frankfurt, singapore
     branch: main
     numInstances: 1
-    # Every push to main goes live. A deploy restarts the server, which ends the games in
-    # progress (they live in memory): set this to "off" once people play for real, and
-    # deploy from the dashboard instead (Manual Deploy > Deploy latest commit).
+    # Every push to main goes live. Games live in memory; on a deploy the old server hands
+    # them to the new one as it stops (api/handoff.py), so they carry on. A crash still ends them.
     autoDeployTrigger: commit
     buildCommand: >-
       pip install -r requirements.txt &&
@@ -41,3 +40,7 @@ services:
       # Check after a change: /api/health must show your own public address as "visitor".
       - key: REALMCHESS_TRUST_PROXY
         value: "2"
+      # The secret the old server shows the new one when handing over the games on a deploy.
+      # Render makes one up once; it is sent to RENDER_EXTERNAL_URL, which Render sets.
+      - key: REALMCHESS_HANDOFF_KEY
+        generateValue: true

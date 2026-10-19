@@ -121,9 +121,14 @@ venv/bin/python serve.py                       # then open http://localhost:8000
   default the number of cores minus one, at most 4) with a short line behind them. When the
   line is full a computer move is answered with `busy: true` and the page asks again.
 
-It is a single process on purpose: games live in its memory. Restarting it ends the games in
-progress, and running two copies would give each its own set of games. Settings are
-environment variables: `PORT` (8000), `HOST` (0.0.0.0), `REALMCHESS_THINKERS`, and
+It is a single process on purpose: games live in its memory, and running two copies would
+give each its own set of games. When the server is replaced (a deploy), the old one hands its
+games to the new one as it stops, so they carry on (`api/handoff.py`): it sends them, as
+starting options plus moves, to `REALMCHESS_HANDOFF_URL` (default `RENDER_EXTERNAL_URL`), and
+the new server replays them. Both need the same secret in `REALMCHESS_HANDOFF_KEY`; without it
+nothing is handed over. For its first minute the new server waits briefly before calling an
+unknown game gone, in case it is still on its way. A crash still ends the games. Settings are
+environment variables: `PORT` (8000), `HOST` (0.0.0.0), `REALMCHESS_THINKERS`, the two above, and
 `REALMCHESS_TRUST_PROXY`: how many proxies stand in front of the server (default 1, `0` for
 none). Each proxy adds the address it heard from to the end of `X-Forwarded-For`, so the
 visitor is that many entries from the end. `GET /api/health` is for a host's health check;
@@ -141,9 +146,11 @@ service that builds the pages and starts `serve.py`.
 2. When the first deploy is live, open `https://realmchess.onrender.com/api/health`.
    `visitor` must be your own public address. If it is not, the number of proxies in
    `REALMCHESS_TRUST_PROXY` is wrong and the limits per visitor would be shared.
-3. Every push to `main` deploys by itself (`autoDeployTrigger: commit`). A deploy restarts
-   the server, which ends the games in progress; once people play for real, set it to `"off"`
-   and deploy with **Manual Deploy > Deploy latest commit** instead.
+3. Every push to `main` deploys by itself (`autoDeployTrigger: commit`). Render starts the new
+   server, moves visitors to it, then stops the old one, which hands its games over. That needs
+   `REALMCHESS_HANDOFF_KEY`, which `render.yaml` has Render make up. If the service was created
+   before that line existed and the Blueprint does not sync by itself, add the variable in the
+   dashboard (**Environment**, any long random value).
 
 The file sets one computer thinker, which suits a plan with one core or less; raise
 `REALMCHESS_THINKERS` together with the plan.
@@ -279,8 +286,8 @@ fails with `draw_declined: true`. `/resign` without a color is the human's resig
 **Rooms:** every game lives in its own room (`api/rooms.py`). `POST /api/games` with
 `{"kind": "local" | "computer" | "online" | "practice", ...the options of /api/game/new}` opens
 one and answers with its `game_id`; every other endpoint then takes `?game=<game_id>`. Game
-answers also carry `kind`, `version` and `stamp`. Rooms are kept in memory: they are lost when
-the server restarts and removed a day after their last use (a request for one that is gone gets
+answers also carry `kind`, `version` and `stamp`. Rooms are kept in memory: handed to the next
+server on a deploy, lost in a crash, and removed a day after their last use (a request for one that is gone gets
 HTTP 404 with `gone: true`). Two rooms always exist for the test bench and the tests: `main`,
 used when no game is named, and `practice`.
 

@@ -48,6 +48,9 @@ class GameManager:
         self._think = think       # how the computer thinks: think(game, level, seconds) -> dict (see api/thinker.py)
         self._version = 0         # goes up with every change, so a slow computer move can tell it is out of date
         self._thinking_about = None   # the version the computer is thinking about right now, if any
+        # How the game was started (new_game's arguments), so it can be replayed on another
+        # server (api/handoff.py); None once the position has been edited by hand
+        self.options = {"rocks": True, "move_limit": 50, "clock": None, "computer": None}
 
     # ==================== HELPERS ====================
 
@@ -167,11 +170,15 @@ class GameManager:
                         board.remove_piece(coord)
                 game.reset_tracking()
             self._replace_game(game, new_clock, computer)
+            self.options = {"rocks": bool(rocks), "move_limit": move_limit,
+                            "clock": {"initial": initial, "increment": increment} if new_clock is not None else None,
+                            "computer": computer}
             return self._state_response()
         except ValueError as e:
             return self._error_response(e)
 
     def _replace_game(self, game, clock=None, computer=None):
+        self.options = None   # new_game() fills it in; any other new position cannot be replayed
         self.game = game
         self.clock = clock
         self.result = None
@@ -459,6 +466,7 @@ class GameManager:
                 raise ValueError("Promote the pawn before changing the turn!")
             self.game.current_player = player
             self.game.restart_draw_tracking()
+            self.options = None
             self._version += 1
             return self._state_response()
         except ValueError as e:

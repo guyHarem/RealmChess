@@ -20,7 +20,7 @@ function outcomeOf(game) {
   if (!game) return null
   const computer = game.computer?.color
   const you = computer ? otherColor(computer) : game.online?.you
-  const rival = computer ? 'The computer' : 'Your opponent'
+  const rival = computer ? 'The computer' : game.teams ? 'The other team' : 'Your opponent'
   // "White" when both sides are on this screen (or we are watching); otherwise "You" and
   // "The computer" / "Your opponent", with the verb form that goes with each
   const who = (color) => (!you ? NAMES[color] : color === you ? 'You' : rival)
@@ -52,11 +52,15 @@ function outcomeOf(game) {
   return game.draw_reason ? { title: 'Draw', detail: reasons[game.draw_reason] } : null
 }
 
-export default function Game({ id }) {
+// In a team game, which of a side's two players a seat is: "white2" is White 2
+const seatNumber = (seat) => (seat?.endsWith('2') ? 2 : 1)
+const seatName = (seat) => `${NAMES[seat.slice(0, 5)]} ${seatNumber(seat)}`
+
+export default function Game({ id, joinSide = null }) {
   const {
     game, selected, legalMoves, error, gone, clickCell, newGame, undo, promote, resign, agreeDraw, refresh, computerMove,
     offer, answer,
-  } = useGame(id)
+  } = useGame(id, joinSide)
   const [settings] = useState(loadSettings)
   const [flipped, setFlipped] = useState(false)
   const [activeLayer, setActiveLayer] = useState(0)
@@ -69,7 +73,7 @@ export default function Game({ id }) {
   const [attempt, setAttempt] = useState(0)
   const [seenMoves, setSeenMoves] = useState(0)
   const [inviteClosed, setInviteClosed] = useState(false)
-  const [copied, setCopied] = useState(false)
+  const [copied, setCopied] = useState(null) // the link last copied
   const [menuOpen, setMenuOpen] = useState(false)
   const phone = usePhone()
   const waiting = useRef(false)
@@ -86,10 +90,19 @@ export default function Game({ id }) {
   const you = online?.you ?? null
   const rival = you ? otherColor(you) : null
   const watching = !!online && !you
-  const friendMissing = !!online && !(online.seats.white && online.seats.black)
+  const friendMissing = !!online && Object.values(online.seats).some((taken) => !taken)
   const theirOffer = online?.offer && you && online.offer.by !== you ? online.offer : null
   const myOffer = online?.offer && online.offer.by === you ? online.offer : null
   const link = `${window.location.origin}${window.location.pathname}#/game/${id}`
+  // A team game: two players a side take turns with the army. turnSeat is whose turn it is
+  // ("black2": Black's second player); mySeat is ours online.
+  const teams = !!game?.teams
+  const turnSeat = game?.teams?.turn ?? player
+  const mySeat = online?.seat ?? null
+  const myTurn = !online || (teams ? mySeat === turnSeat : you === player)
+  const freeSeats = (color) => Object.entries(online?.seats ?? {}).some(([seat, taken]) => !taken && seat.startsWith(color))
+  // Who is up within a team: online and on one screen "White 2"; with the computer "Player 2"
+  const turnName = computer ? `Player ${seatNumber(turnSeat)}` : seatName(turnSeat)
   // Our side sits nearest the camera, unless the view has been flipped
   const mine = you ?? human ?? settings.side
   const side = flipped ? otherColor(mine) : mine
@@ -107,7 +120,7 @@ export default function Game({ id }) {
   if (history.length !== seenMoves) {
     setSeenMoves(history.length)
     const mover = parsePiece(lastEntry?.moving_piece)?.color
-    if (lastEntry && mover === (computer?.color ?? rival)) setActiveLayer(lastEntry.to[2])
+    if (lastEntry && (teams || mover === (computer?.color ?? rival))) setActiveLayer(lastEntry.to[2])
   }
 
   const send = (type, direction) => setCommand({ id: Date.now(), type, direction })
@@ -134,7 +147,7 @@ export default function Game({ id }) {
   }, [computerTurn, history.length, attempt, computerMove])
 
   function onCellClick(coord) {
-    if (outcome || computerTurn || (online && you !== player)) return
+    if (outcome || computerTurn || !myTurn) return
     // Picking up a piece on another layer brings that layer forward
     const piece = parsePiece(board[keyOf(coord)])
     const isTarget = legalMoves.some((move) => keyOf(move) === keyOf(coord))
@@ -147,6 +160,7 @@ export default function Game({ id }) {
       navigate('/setup') // an online game is replayed by making a new one and sending its link
       return
     }
+    // (a team game on this screen stays one: the room keeps its teams)
     setResultSeen(false)
     setAsking(null)
     newGame({
@@ -160,6 +174,7 @@ export default function Game({ id }) {
   async function offerDraw() {
     setAsking(null)
     if (online) {
+      // Against the computer online it answers at once; a refusal shows as a note
       offer('draw')
       return
     }
@@ -173,41 +188,62 @@ export default function Game({ id }) {
     else undo()
   }
 
-  async function copyLink() {
+  async function copyLink(text) {
     try {
-      await navigator.clipboard.writeText(link)
-      setCopied(true)
+      await navigator.clipboard.writeText(text)
+      setCopied(text)
     } catch {
-      setCopied(false) // the link is on screen to select by hand
+      setCopied(null) // the link is on screen to select by hand
     }
   }
 
+  // Whether every seat of a side is connected (a side the computer plays has none)
+  const seatsOf = (color) => Object.keys(online?.seats ?? {}).filter((seat) => seat.startsWith(color))
+  const allConnected = (color) => seatsOf(color).every((seat) => online.connected[seat])
   const nameOf = (color) => {
-    if (computer) return color === computer.color ? `Computer, ${levelName(computer.level)}` : 'You'
-    if (!online) return color === 'white' ? 'Player 1' : 'Player 2'
-    if (color === you) return 'You'
-    if (!online.seats[color]) return 'Waiting to join'
-    const label = watching ? 'Player' : 'Opponent'
-    return online.connected[color] ? label : `${label}, not connected`
+    if (color === computer?.color) return `Computer, ${levelName(computer.level)}`
+    if (!online) {
+      if (teams) return computer ? 'Player 1 and Player 2' : `${NAMES[color]} 1 and ${NAMES[color]} 2`
+      if (computer) return 'You'
+      return color === 'white' ? 'Player 1' : 'Player 2'
+    }
+    if (freeSeats(color)) return 'Waiting to join'
+    const label = color === you
+      ? (teams ? 'You and your teammate' : 'You')
+      : watching ? (teams ? 'Team' : 'Player') : (teams ? 'The other team' : 'Opponent')
+    if (color === you && !teams) return label
+    if (allConnected(color)) return label
+    return `${label}, ${teams ? 'someone not connected' : 'not connected'}`
   }
   const noteOf = (color) => {
     if (outcome || player !== color) return undefined
     if (color === computer?.color) return 'Thinking'
+    const check = game?.status === 'check' ? ', in check' : ''
     if (online && color !== you) {
-      if (!online.seats[color]) return 'Waiting to join'
-      return `${watching ? 'To move' : 'Their move'}${online.connected[color] ? '' : ', not connected'}`
+      if (freeSeats(color)) return 'Waiting to join'
+      const whose = watching ? (teams ? `${turnName} to move` : 'To move') : (teams ? `${turnName}'s move` : 'Their move')
+      return `${whose}${online.connected[turnSeat] ? '' : ', not connected'}`
     }
-    return game?.status === 'check' ? 'Your move, in check' : undefined
+    if (teams) {
+      if (online) return myTurn ? `Your move${check}` : `Your teammate's move${check}`
+      return `${turnName} to move${check}`
+    }
+    return check ? 'Your move, in check' : undefined
   }
   let turnText = `${NAMES[player]} to move`
-  if (computer) turnText = computerTurn ? 'The computer is thinking' : 'Your move'
-  else if (online && friendMissing && !watching) turnText = phone ? 'Waiting for your friend' : 'Waiting for your friend to join'
-  else if (online && !watching) turnText = you === player ? 'Your move' : "Your opponent's move"
+  if (online && friendMissing && !watching) {
+    turnText = teams ? 'Waiting for players to join' : phone ? 'Waiting for your friend' : 'Waiting for your friend to join'
+  } else if (computerTurn) turnText = 'The computer is thinking'
+  else if (online && !watching) {
+    turnText = myTurn ? 'Your move' : player === you ? "Your teammate's move" : teams ? "The other team's move" : "Your opponent's move"
+  } else if (online && teams) turnText = `${turnName} to move`
+  else if (computer) turnText = teams ? `${turnName}'s move` : 'Your move'
+  else if (teams) turnText = `${turnName} to move`
 
   // You can ask to take a move back once you have made one
   const myMoves = history.filter((entry) => parsePiece(entry.moving_piece)?.color === you).length
   const undoDisabled = online
-    ? watching || !!outcome || !!online.offer || myMoves === 0
+    ? watching || !!outcome || !!online.offer || myMoves === 0 || computerTurn
     : !settings.allowUndo || history.length === 0
   const offerDisabled = !!outcome || watching || !!online?.offer
 
@@ -267,7 +303,7 @@ export default function Game({ id }) {
     <>
       <div className="button-grid">
         <button type="button" className="button" disabled={undoDisabled} onClick={takeBack}>
-          {online ? 'Ask to take back' : 'Undo move'}
+          {online && !computer ? 'Ask to take back' : 'Undo move'}
         </button>
         <button type="button" className="button" disabled={offerDisabled} onClick={() => setAsking('draw')}>
           Offer draw
@@ -291,8 +327,10 @@ export default function Game({ id }) {
       {watching && <p className="banner-note">You are watching this game.</p>}
       {myOffer && !outcome && (
         <p className="banner-note">
-          {myOffer.kind === 'draw' ? 'You offered a draw.' : 'You asked to take your move back.'} Waiting for an
-          answer.{' '}
+          {teams
+            ? myOffer.kind === 'draw' ? 'Your team offered a draw.' : 'Your team asked to take a move back.'
+            : myOffer.kind === 'draw' ? 'You offered a draw.' : 'You asked to take your move back.'}{' '}
+          Waiting for an answer.{' '}
           <button type="button" className="link-button" onClick={() => answer(false)}>
             Withdraw
           </button>
@@ -300,9 +338,9 @@ export default function Game({ id }) {
       )}
       {online && friendMissing && !watching && inviteClosed && (
         <p className="banner-note">
-          Your friend has not joined yet.{' '}
+          {teams ? 'Not everyone has joined yet.' : 'Your friend has not joined yet.'}{' '}
           <button type="button" className="link-button" onClick={() => setInviteClosed(false)}>
-            Show the link
+            {teams ? 'Show the links' : 'Show the link'}
           </button>
         </p>
       )}
@@ -344,13 +382,13 @@ export default function Game({ id }) {
         onCellClick={onCellClick}
       />
 
-      {online && friendMissing && !watching && !inviteClosed && (
+      {online && friendMissing && !watching && !inviteClosed && !teams && (
         <Dialog
           title="Invite your friend"
           actions={
             <>
-              <button type="button" className="button button-primary" onClick={copyLink}>
-                {copied ? 'Copied' : 'Copy link'}
+              <button type="button" className="button button-primary" onClick={() => copyLink(link)}>
+                {copied === link ? 'Copied' : 'Copy link'}
               </button>
               <button type="button" className="button" onClick={() => setInviteClosed(true)}>
                 Close
@@ -363,9 +401,43 @@ export default function Game({ id }) {
         </Dialog>
       )}
 
+      {online && friendMissing && !watching && !inviteClosed && teams && (
+        <Dialog
+          title="Invite the players"
+          actions={
+            <button type="button" className="button" onClick={() => setInviteClosed(true)}>
+              Close
+            </button>
+          }
+        >
+          <p>Each link seats whoever opens it on that side, until the side is full. Anyone after that can watch.</p>
+          {[you, rival].filter((color) => freeSeats(color)).map((color) => (
+            <div key={color} className="invite-row">
+              <label htmlFor={`invite-${color}`}>{color === you ? 'Your teammate' : `The other team (${NAMES[color]})`}</label>
+              <div className="invite-copy">
+                <input
+                  id={`invite-${color}`}
+                  className="invite-link"
+                  readOnly
+                  value={`${link}/${color}`}
+                  onFocus={(event) => event.target.select()}
+                />
+                <button type="button" className="button button-primary" onClick={() => copyLink(`${link}/${color}`)}>
+                  {copied === `${link}/${color}` ? 'Copied' : 'Copy'}
+                </button>
+              </div>
+            </div>
+          ))}
+        </Dialog>
+      )}
+
       {theirOffer && !outcome && (
         <Dialog
-          title={theirOffer.kind === 'draw' ? 'Your opponent offers a draw' : 'Your opponent asks to take a move back'}
+          title={
+            teams
+              ? theirOffer.kind === 'draw' ? 'The other team offers a draw' : 'The other team asks to take a move back'
+              : theirOffer.kind === 'draw' ? 'Your opponent offers a draw' : 'Your opponent asks to take a move back'
+          }
           actions={
             <>
               <button type="button" className="button button-primary" onClick={() => answer(true)}>
@@ -387,7 +459,7 @@ export default function Game({ id }) {
         </Dialog>
       )}
 
-      {game?.pending_promotion && player !== computer?.color && (!online || player === you) && (
+      {game?.pending_promotion && player !== computer?.color && myTurn && (
         <Dialog
           title="Promote your pawn"
           actions={PROMOTIONS.map((type) => (
@@ -422,12 +494,14 @@ export default function Game({ id }) {
           }
         >
           <p>
-            {computer ? 'The computer will win.' : online ? 'Your opponent will win.' : `${NAMES[otherColor(player)]} will win.`}
+            {computer
+              ? 'The computer will win.'
+              : online ? (teams ? 'The other team will win.' : 'Your opponent will win.') : `${NAMES[otherColor(player)]} will win.`}
           </p>
         </Dialog>
       )}
 
-      {asking === 'draw' && online && (
+      {asking === 'draw' && online && !computer && (
         <Dialog
           title="Offer your opponent a draw?"
           actions={
@@ -447,7 +521,7 @@ export default function Game({ id }) {
 
       {asking === 'draw' && !computer && !online && (
         <Dialog
-          title={`${NAMES[player]} offers a draw`}
+          title={`${teams ? `${NAMES[player]} team` : NAMES[player]} offers a draw`}
           actions={
             <>
               <button type="button" className="button button-primary" onClick={offerDraw}>

@@ -18,9 +18,11 @@ export default function App() {
   if (route === '/setup') return <Setup />
   if (route.startsWith('/game')) {
     // Every game has its own address; a bare #/game goes back to the one last played here
-    const id = route.split('/')[2] ?? lastGame()
+    // #/game/<id>, or #/game/<id>/<side> from an invite to play that side of a team game
+    const [, , linkId, side] = route.split('/')
+    const id = linkId ?? lastGame()
     if (!id) return <Setup />
-    return <Game key={id} id={id} />
+    return <Game key={id} id={id} joinSide={side === 'white' || side === 'black' ? side : null} />
   }
   if (route === '/learn') return <Learn />
   if (route.startsWith('/scenarios')) return <Scenarios id={route.split('/')[2]} />

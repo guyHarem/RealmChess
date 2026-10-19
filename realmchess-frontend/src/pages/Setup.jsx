@@ -4,7 +4,7 @@ import Logo from '../components/Logo.jsx'
 import { OFFLINE, openGame } from '../lib/api.js'
 import { START_BOARD } from '../lib/chess.js'
 import { navigate } from '../lib/router.js'
-import { CLOCK_PRESETS, LEVELS, clockRequest, computerRequest, levelName, loadSettings, saveSettings } from '../lib/settings.js'
+import { CLOCK_PRESETS, LEVELS, clockRequest, computerRequest, levelName, loadSettings, playsComputer, saveSettings } from '../lib/settings.js'
 
 function Choice({ selected, disabled, onClick, title, hint, children }) {
   return (
@@ -57,6 +57,9 @@ export default function Setup() {
   const previewSide = sideChoice === 'black' ? 'black' : 'white'
   const againstComputer = settings.opponent === 'computer'
   const online = settings.opponent === 'online'
+  const teams = settings.teams
+  const teamVsComputer = online && teams && settings.onlineRival === 'computer'
+  const level = LEVELS.find((option) => option.id === settings.level)
   const previewBoard = settings.rocks
     ? START_BOARD
     : Object.fromEntries(Object.entries(START_BOARD).filter(([, value]) => value !== 'Rock'))
@@ -68,6 +71,7 @@ export default function Setup() {
       const data = await openGame({
         kind: online ? 'online' : againstComputer ? 'computer' : 'local',
         side,
+        teams,
         rocks: settings.rocks,
         move_limit: limit,
         clock: clockRequest(clock),
@@ -120,6 +124,14 @@ export default function Setup() {
 
           <div className="setup-pair">
             <fieldset>
+              <legend>Players</legend>
+              <div className="choices">
+                <Choice selected={!teams} onClick={() => set({ teams: false })} title="One a side" />
+                <Choice selected={teams} onClick={() => set({ teams: true })} title="Teams of two" />
+              </div>
+            </fieldset>
+
+            <fieldset>
               <legend>{againstComputer || online ? 'Your side' : 'Side nearest you'}</legend>
               <div className="choices">
                 <Choice selected={sideChoice === 'white'} onClick={() => setSideChoice('white')}>
@@ -133,23 +145,37 @@ export default function Setup() {
                 <Choice selected={sideChoice === 'random'} onClick={() => setSideChoice('random')} title="Random" />
               </div>
             </fieldset>
-
-            {againstComputer && (
-              <fieldset>
-                <legend>Computer level</legend>
-                <div className="choices">
-                  {LEVELS.map((level) => (
-                    <Choice
-                      key={level.id}
-                      selected={settings.level === level.id}
-                      onClick={() => set({ level: level.id })}
-                      title={level.label}
-                    />
-                  ))}
-                </div>
-              </fieldset>
-            )}
           </div>
+
+          {((online && teams) || playsComputer(settings)) && (
+            <div className="setup-pair">
+              {online && teams && (
+                <fieldset>
+                  <legend>Your team plays</legend>
+                  <div className="choices">
+                    <Choice selected={!teamVsComputer} onClick={() => set({ onlineRival: 'friends' })} title="Another team" />
+                    <Choice selected={teamVsComputer} onClick={() => set({ onlineRival: 'computer' })} title="The computer" />
+                  </div>
+                </fieldset>
+              )}
+
+              {playsComputer(settings) && (
+                <fieldset>
+                  <legend>Computer level</legend>
+                  <div className="choices">
+                    {LEVELS.map((level) => (
+                      <Choice
+                        key={level.id}
+                        selected={settings.level === level.id}
+                        onClick={() => set({ level: level.id })}
+                        title={level.label}
+                      />
+                    ))}
+                  </div>
+                </fieldset>
+              )}
+            </div>
+          )}
 
           <fieldset>
             <legend>Clock</legend>
@@ -249,13 +275,35 @@ export default function Setup() {
           </div>
           <p className="setup-summary">
             <strong>
-              {againstComputer
-                ? `You against the computer, ${levelName(settings.level)}`
-                : online
-                  ? 'You against a friend online'
-                  : 'Two players on this screen'}
+              {teams
+                ? againstComputer
+                  ? `You and a friend against the computer, ${levelName(settings.level)}`
+                  : teamVsComputer
+                    ? `Your team against the computer online, ${levelName(settings.level)}`
+                    : online
+                      ? 'Your team against another team online'
+                      : 'Four players on this screen'
+                : againstComputer
+                  ? `You against the computer, ${levelName(settings.level)}`
+                  : online
+                    ? 'You against a friend online'
+                    : 'Two players on this screen'}
             </strong>
-            {online
+            {teams
+              ? `${
+                  online
+                    ? teamVsComputer
+                      ? 'You get a link for your teammate.'
+                      : 'You get two links: one for your teammate, one for the other team.'
+                    : againstComputer
+                      ? `${level.hint}.`
+                      : 'Two a side.'
+                } Teammates take turns with one army: ${
+                  againstComputer || teamVsComputer
+                    ? 'player 1 moves, the computer replies, then player 2'
+                    : 'White 1, Black 1, White 2, Black 2'
+                }, and round again.`
+              : online
               ? `You get a link to send. ${
                   sideChoice === 'random' ? 'A coin flip decides your side.' : `You play ${previewSide === 'white' ? 'White and move first' : 'Black'}.`
                 }`

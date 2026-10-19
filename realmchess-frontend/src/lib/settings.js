@@ -2,6 +2,8 @@
 
 export const DEFAULT_SETTINGS = {
   opponent: 'local', // 'local' (two players on this screen), 'computer' or 'online'
+  teams: false, // two players a side, taking turns with the army
+  onlineRival: 'friends', // a team online plays 'friends' (another team) or the 'computer'
   level: 'medium', // the computer's level
   side: 'white', // which colour sits nearest the camera; against the computer, the side you play
   rocks: true,
@@ -26,9 +28,13 @@ export const LEVELS = [
 ]
 export const levelName = (id) => LEVELS.find((level) => level.id === id)?.label ?? id
 
+// Whether the computer plays: against it on this screen, or a team playing it online
+export const playsComputer = (settings) =>
+  settings.opponent === 'computer' || (settings.opponent === 'online' && settings.teams && settings.onlineRival === 'computer')
+
 // The computer part of a "new game" request: null for two players, else its colour and level
 export function computerRequest(settings, side = settings.side) {
-  if (settings.opponent !== 'computer') return null
+  if (!playsComputer(settings)) return null
   return { color: side === 'white' ? 'black' : 'white', level: settings.level }
 }
 

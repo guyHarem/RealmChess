@@ -31,6 +31,8 @@ It was called CubeChess until October 2026. The site will be at [realmchess.com]
 - ✅ Scenario player: 32 checkmate puzzles in four tiers (`realmchess-frontend/src/scenarios.json`)
 - ✅ Play against the computer (easy, medium, hard), with the last move marked on the board
 - ✅ Online play with a link: seats without accounts, draw and take-back offers, watching
+- ✅ Team games: two players a side take turns with one army, on one screen, against the
+  computer, or online (2 against 2, or a team against the computer)
 - ✅ Phone layout: the game, lessons and puzzles fit one upright phone screen (3D board on top,
   top view below for tapping, the rest behind a Menu button)
 - ⏳ Hosting (so far it runs on your own machine and network)
@@ -231,7 +233,7 @@ The test bench edits positions through sandbox endpoints that are for testing on
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/games` | POST | Open a room and start a game in it (see Rooms below) |
-| `/api/game/join` | POST | Online: take the free seat, or watch |
+| `/api/game/join` | POST | Online: take a free seat (optional `{"side"}`), or watch |
 | `/api/game/offer` | POST | Online: offer a draw or ask to take a move back |
 | `/api/game/answer` | POST | Online: accept, decline or withdraw the offer |
 | `/api/game/new` | POST | Start a new game in the same room. Optional body: `{"rocks": true, "move_limit": 50, "clock": {"initial": 600, "increment": 5}, "computer": {"color": "black", "level": "hard"}}` |
@@ -302,6 +304,17 @@ field tells the page `you` (your color or `null`), which `seats` are taken, who 
   a pending offer. An accepted take-back undoes the asker's last move, and the reply to it if
   there was one.
 - `/undo`, `/draw`, `/new` and the sandbox endpoints are refused in online games.
+
+**Team games:** `"teams": true` when opening a game makes it two players a side, taking turns
+with one army: White 1, Black 1, White 2, Black 2, and round again (a take-back hands the turn
+back too). It works on one screen, against the computer, and online, where the seats are
+`white`, `white2`, `black` and `black2`, and a team may also play the computer (open it with
+`"kind": "online", "teams": true, "computer": {...}`; that side has no seats, the computer
+answers draw offers itself and a take-back needs no leave). `POST /api/game/join` takes
+`{"side": "white" | "black"}` to sit on that side; the invite links end in `/<side>`. Every
+game answer carries `teams`: `{"turn": "<seat>"}` in a team game, else `null`; online,
+`online.seat` is your own seat, and a move out of turn is refused with "It is your teammate's
+move".
 - Pages keep up by asking `GET /api/game/state?since=<stamp>` once a second; if nothing changed
   the answer is short (`unchanged: true`, the clock and `online`).
 

@@ -5,8 +5,9 @@ import { keyOf, parsePiece, sameCoord } from './chess.js'
 
 const POLL_MS = 1000 // how often an online game asks whether the other player has done something
 
-// which: a room id, or 'practice' for the lesson board
-export function useGame(which = 'main') {
+// which: a room id, or 'practice' for the lesson board. joinSide: the side an invite asks
+// you to play in an online team game ('white' or 'black'), or null for any free seat.
+export function useGame(which = 'main', joinSide = null) {
   const [game, setGame] = useState(null)
   const [selected, setSelected] = useState(null)
   const [legalMoves, setLegalMoves] = useState([])
@@ -83,7 +84,7 @@ export function useGame(which = 'main') {
         let data = await api('/game/state', undefined, which)
         if (stopped) return
         if (data.kind === 'online' && !data.online.you) {
-          data = await api('/game/join', {}, which)
+          data = await api('/game/join', joinSide ? { side: joinSide } : {}, which)
           if (stopped) return
           if (data.seat) rememberSeat(which, data.seat)
         }
@@ -100,7 +101,7 @@ export function useGame(which = 'main') {
       stopped = true
       clearTimeout(timer)
     }
-  }, [which, accept])
+  }, [which, joinSide, accept])
 
   // Re-read the game without touching the selection (used when a clock runs out)
   const refresh = useCallback(async () => {

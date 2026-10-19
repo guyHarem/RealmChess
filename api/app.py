@@ -14,6 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from flask import Flask, request, jsonify, g, send_from_directory
 from flask_cors import CORS
 from werkzeug.middleware.proxy_fix import ProxyFix
+from api import handoff
 from api.handoff import Arrival, key as handoff_key, key_matches
 from api.limits import Limiter, Slots
 from api.rooms import Rooms
@@ -424,16 +425,23 @@ def no_sandbox_online():
 
 # ==================== HANDOVER ON A DEPLOY ====================
 
-@app.route('/api/handoff', methods=['POST'])
-def take_handoff():
-    """The previous server sends its games here as it stops (see api/handoff.py). Body:
-    {"rooms": [...], "done": true on the last batch}. Needs the shared key."""
+@app.route('/api/handoff', methods=['GET', 'POST'])
+def handoff_games():
+    """Between the old and the new server on a deploy (see api/handoff.py); needs the shared
+    key. GET: the new server asks for every game. POST {"rooms": [...], "done": true on the
+    last batch}: the old server sends them as it stops. Either answer names this server, so a
+    server that has reached itself can tell."""
     if not key_matches(request.headers.get("X-Handoff-Key")):
         return refuse("No such endpoint", 404)
+    if request.method == "GET":
+        return jsonify({"success": True, "server": handoff.SERVER, "rooms": handoff.snapshots(rooms, app.logger.warning)})
+    if request.headers.get("X-Handoff-From") == handoff.SERVER:
+        return jsonify({"success": True, "server": handoff.SERVER, "self": True, "restored": 0})
     data = request.get_json(silent=True)
     if not isinstance(data, dict) or not isinstance(data.get("rooms"), list):
         return refuse("Expected {\"rooms\": [...]}")
-    return jsonify({"success": True, "restored": arrival.take(rooms, data, log=app.logger.warning)})
+    restored = arrival.take(rooms, data, how="pushed", log=app.logger.warning)
+    return jsonify({"success": True, "server": handoff.SERVER, "restored": restored})
 
 
 # ==================== THE PAGES ====================
@@ -445,8 +453,10 @@ def health():
     host, since the limits per visitor go by this address. And whether REALMCHESS_HANDOFF_KEY
     is set, without which a deploy ends the games in progress."""
     if hosted():
-        # "handoff": whether this server has the key to take over games on a deploy (not the key)
-        return jsonify({"success": True, "visitor": visitor(), "handoff": handoff_key() is not None})
+        # "handoff": whether this server has the key to take over games on a deploy (not the
+        # key), and how many games it took over from the previous server
+        return jsonify({"success": True, "visitor": visitor(), "handoff": handoff_key() is not None,
+                        "taken_over": dict(arrival.counts)})
     return jsonify({"success": True})
 
 

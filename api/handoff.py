@@ -2,18 +2,24 @@
 Handing the games over when the server is replaced, so a deploy does not end them.
 
 Games live in the server's memory. On a deploy, the host (Render) starts the new server, sends
-visitors to it once it answers /api/health, and only then tells the old one to stop
-(SIGTERM). The old server then sends every game to the service's public address, which by now
-reaches the new server, and the new one carries on with them. It costs nothing, but it only
-covers a planned replacement: a crash still loses the games.
+visitors to it once it answers /api/health, and then tells the old one to stop (SIGTERM).
+Both ends hand over, through the service's public address:
+  - the new server, while starting and before it answers /api/health, asks for the games
+    (GET /api/handoff): the address still leads to the old server then;
+  - the old server, as it stops, sends them again (POST /api/handoff) to catch the moves made
+    in between. If that reaches the old server itself (the switch can take a moment), it
+    tries again.
+It costs nothing, but it only covers a planned replacement: a crash still loses the games.
 
 A game travels as its starting options and its moves, and the new server replays them, so
 nothing but plain JSON crosses over and every move is checked by the rules again. Positions
 edited by hand (the lesson and puzzle boards) do not travel; their pages start them afresh.
 
-Settings (environment variables), both needed:
-    REALMCHESS_HANDOFF_KEY    a shared secret; the receiving server only takes games with it
-    REALMCHESS_HANDOFF_URL    where to send them (default: RENDER_EXTERNAL_URL, set by Render)
+Settings (environment variables), the first two needed:
+    REALMCHESS_HANDOFF_KEY       a shared secret; a server only hands over games with it
+    REALMCHESS_HANDOFF_URL       the public address (default: RENDER_EXTERNAL_URL, set by Render)
+    REALMCHESS_HANDOFF_PATIENCE  seconds a stopping server keeps trying to send (default 25;
+                                 Render waits 30 before it stops a server by force)
 """
 import json
 import os
@@ -121,14 +127,13 @@ def restore(rooms, data):
     return room
 
 
-# ==================== SENDING (the old server) ====================
+# ==================== BETWEEN THE TWO SERVERS ====================
 
-def send(rooms, url=None, log=print):
-    """Send every game to the new server. Returns how many went over."""
-    url, secret = url or target(), key()
-    if not url or not secret:
-        return 0
-    batches, batch, size, sent = [], [], 0, 0
+SERVER = secrets.token_hex(8)   # this server process, so a server can tell it has reached itself
+
+
+def snapshots(rooms, log=print):
+    games = []
     for room in rooms.all():
         data = snapshot(room)
         if data is None:
@@ -137,22 +142,72 @@ def send(rooms, url=None, log=print):
         if length > BATCH_BYTES:
             log(f"handoff: game {room.id} is too long to send ({length} bytes)")
             continue
+        games.append(data)
+    return games
+
+
+def _call(url, body=None):
+    """GET (body None) or POST to the other server's /api/handoff; returns its JSON answer"""
+    request = urllib.request.Request(
+        url.rstrip("/") + "/api/handoff", method="GET" if body is None else "POST",
+        data=json.dumps(body).encode() if body is not None else None,
+        headers={"Content-Type": "application/json", "X-Handoff-Key": key(), "X-Handoff-From": SERVER})
+    with urllib.request.urlopen(request, timeout=10) as answer:
+        return json.loads(answer.read())
+
+
+def pull(rooms, arrival, url=None, log=print):
+    """The new server, before it takes visitors: ask the old one, which still has them, for
+    its games. Returns how many arrived."""
+    url = url or target()
+    if not url or not key():
+        return 0
+    try:
+        answer = _call(url)
+    except (OSError, ValueError) as e:
+        log(f"handoff: no games from the previous server ({e})")
+        return 0
+    if answer.get("server") == SERVER:
+        return 0
+    taken = arrival.take(rooms, {"rooms": answer.get("rooms", [])}, how="pulled", log=log)
+    log(f"handoff: {taken} game(s) taken over from the previous server")
+    return taken
+
+
+def send(rooms, url=None, log=print, give_up_after=None, pause=1.0):
+    """The old server, as it stops: send every game to the new one, which by then has them
+    from pull() but not the moves made since. Right after a deploy the public address can
+    still lead back here; then try again until it reaches the new server. Returns how many
+    games the new server took."""
+    url = url or target()
+    if not url or not key():
+        return 0
+    batches, batch, size = [], [], 0
+    for data in snapshots(rooms, log):
+        length = len(json.dumps(data))
         if batch and size + length > BATCH_BYTES:
             batches.append(batch)
             batch, size = [], 0
         batch.append(data)
         size += length
     batches.append(batch)
+    if give_up_after is None:
+        give_up_after = float(os.environ.get("REALMCHESS_HANDOFF_PATIENCE", 25))
+    deadline = time.monotonic() + give_up_after
+    sent = 0
     for index, batch in enumerate(batches):
-        body = json.dumps({"rooms": batch, "done": index == len(batches) - 1}).encode()
-        request = urllib.request.Request(url.rstrip("/") + "/api/handoff", data=body, method="POST",
-                                         headers={"Content-Type": "application/json", "X-Handoff-Key": secret})
-        try:
-            with urllib.request.urlopen(request, timeout=10) as answer:
-                sent += json.loads(answer.read()).get("restored", 0)
-        except OSError as e:
-            log(f"handoff: sending failed: {e}")
-            return sent
+        while True:
+            try:
+                answer = _call(url, {"rooms": batch, "done": index == len(batches) - 1})
+                if not answer.get("self"):
+                    sent += answer.get("restored", 0)
+                    break
+            except (OSError, ValueError) as e:
+                log(f"handoff: sending failed: {e}")
+            if time.monotonic() > deadline:
+                log(f"handoff: gave up; {sent} game(s) sent")
+                return sent
+            time.sleep(pause)
     log(f"handoff: {sent} game(s) sent to the new server")
     return sent
 
@@ -160,12 +215,14 @@ def send(rooms, url=None, log=print):
 # ==================== RECEIVING (the new server) ====================
 
 class Arrival:
-    """The new server's side: whether the old server's games may still be on their way"""
+    """The new server's side: the games taken over, and whether more may still be on the way"""
 
     def __init__(self, now=time.monotonic):
         self._now = now
         self.started = now()
         self.done = threading.Event()
+        self.counts = {"pulled": 0, "pushed": 0}
+        self._taken = {}   # room id -> its version right after it was taken over
 
     def expected(self):
         return key() is not None and not self.done.is_set() and self._now() - self.started < WAIT_SECONDS
@@ -176,16 +233,27 @@ class Arrival:
         if self.expected():
             self.done.wait(min(longest, WAIT_SECONDS - (self._now() - self.started)))
 
-    def take(self, rooms, data, log=print):
+    def take(self, rooms, data, how="pushed", log=print):
+        """Take over games. A game already here is replaced only by a newer copy of one taken
+        over earlier and not played on here since (moves made here are the latest)."""
         restored = 0
-        for room in data.get("rooms", []):
-            if rooms.get(room.get("id")) is not None:
-                continue   # the same id made here meanwhile: keep that one
+        for game in data.get("rooms", []):
+            room_id = game.get("id")
+            here = rooms.get(room_id)
+            if here is not None:
+                taken = self._taken.get(room_id)
+                if taken is None or here.manager._version != taken or game.get("version", -1) + 1 <= taken:
+                    continue
+                rooms.remove(room_id)
             try:
-                restore(rooms, room)
+                room = restore(rooms, game)
+                self._taken[room_id] = room.manager._version
                 restored += 1
             except (ValueError, KeyError, TypeError, AttributeError) as e:
-                log(f"handoff: game {room.get('id')} did not replay: {e}")
+                log(f"handoff: game {room_id} did not replay: {e}")
+                if here is not None:
+                    rooms._rooms[room_id] = here   # keep the copy we had
+        self.counts[how] += restored
         if data.get("done"):
             self.done.set()
         return restored

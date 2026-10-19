@@ -10,6 +10,7 @@ import subprocess
 import sys
 import time
 import unittest
+import unittest.mock
 import urllib.request
 
 from api import handoff
@@ -97,6 +98,39 @@ class TestReplay(unittest.TestCase):
         self.assertIsNone(handoff.snapshot(practice))
         self.assertIsNone(handoff.snapshot(edited))
 
+    def test_a_newer_copy_replaces_one_taken_over_earlier(self):
+        room = self.old.create("local")
+        play(room.manager, ((4, 1, 0), (4, 3, 0)))
+        arrival = handoff.Arrival()
+        early = json.loads(json.dumps(handoff.snapshot(room)))
+        self.assertEqual(arrival.take(self.new, {"rooms": [early]}, how="pulled", log=lambda _: None), 1)
+        play(room.manager, ((4, 6, 0), (4, 4, 0)))   # a move on the old server in between
+        late = json.loads(json.dumps(handoff.snapshot(room)))
+        self.assertEqual(arrival.take(self.new, {"rooms": [late], "done": True}, log=lambda _: None), 1)
+        self.assertEqual(len(self.new.get(room.id).manager.game.move_history), 2)
+        self.assertEqual(arrival.counts, {"pulled": 1, "pushed": 1})
+        # The same copy again, or an older one, changes nothing
+        self.assertEqual(arrival.take(self.new, {"rooms": [early, late]}, log=lambda _: None), 0)
+
+    def test_moves_made_here_are_not_overwritten(self):
+        room = self.old.create("local")
+        play(room.manager, ((4, 1, 0), (4, 3, 0)))
+        arrival = handoff.Arrival()
+        arrival.take(self.new, {"rooms": [json.loads(json.dumps(handoff.snapshot(room)))]}, log=lambda _: None)
+        play(self.new.get(room.id).manager, ((3, 6, 0), (3, 4, 0)))   # played here after the switch
+        play(room.manager, ((4, 6, 0), (4, 4, 0)))
+        stale = json.loads(json.dumps(handoff.snapshot(room)))
+        self.assertEqual(arrival.take(self.new, {"rooms": [stale]}, log=lambda _: None), 0)
+        self.assertEqual(self.new.get(room.id).manager.game.move_history[-1]["to"], (3, 4, 0))
+
+    def test_sending_tries_again_while_it_reaches_itself(self):
+        room = self.old.create("local")
+        play(room.manager, ((4, 1, 0), (4, 3, 0)))
+        answers = iter([{"self": True}, {"self": True}, {"restored": 1}])
+        with unittest.mock.patch.dict(os.environ, {"REALMCHESS_HANDOFF_KEY": "k"}), \
+                unittest.mock.patch.object(handoff, "_call", lambda url, body=None: next(answers)):
+            self.assertEqual(handoff.send(self.old, url="http://new", log=lambda _: None, pause=0), 1)
+
     def test_a_game_that_does_not_replay_is_dropped(self):
         room = self.old.create("local")
         play(room.manager, ((4, 1, 0), (4, 3, 0)))
@@ -114,7 +148,8 @@ class TestRealServers(unittest.TestCase):
     def start(self, port, env):
         server = subprocess.Popen(
             [sys.executable, "-c", f"import serve; serve.start('127.0.0.1', {port}, thinkers=1)"], cwd=ROOT,
-            env={**os.environ, "REALMCHESS_TRUST_PROXY": "0", "REALMCHESS_HANDOFF_KEY": "test-key", **env},
+            env={**os.environ, "REALMCHESS_TRUST_PROXY": "0", "REALMCHESS_HANDOFF_KEY": "test-key",
+                 "REALMCHESS_HANDOFF_PATIENCE": "3", **env},
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         self.addCleanup(lambda: (server.poll() is None and server.terminate(), server.wait(timeout=20)))
         for _ in range(100):
@@ -147,22 +182,28 @@ class TestRealServers(unittest.TestCase):
                 return json.loads(e.read())
 
     def test_a_deploy_keeps_the_online_game(self):
+        # The public address leads to the old server until the new one is up (the new one pulls
+        # from there), and to the new one by the time the old one stops (it pushes there)
         old_port, new_port = self.free_port(), self.free_port()
-        new = self.start(new_port, {})
         old = self.start(old_port, {"REALMCHESS_HANDOFF_URL": f"http://127.0.0.1:{new_port}"})
-
         created = self.call(old_port, "/api/games", {"kind": "online", "clock": {"initial": 300, "increment": 0}})
         game, white = created["game_id"], created["seat"]
         black = self.call(old_port, f"/api/game/join?game={game}", {})["seat"]
         self.assertTrue(self.call(old_port, f"/api/game/move?game={game}", {"from": [4, 1, 0], "to": [4, 3, 0]}, white)["success"])
 
-        old.send_signal(signal.SIGTERM)
-        self.assertEqual(old.wait(timeout=20), 0)
+        self.start(new_port, {"REALMCHESS_HANDOFF_URL": f"http://127.0.0.1:{old_port}"})
+        self.assertEqual(self.call(new_port, "/api/health")["taken_over"], {"pulled": 1, "pushed": 0})
+        # A move still reaches the old server before the switch
+        self.assertTrue(self.call(old_port, f"/api/game/move?game={game}", {"from": [4, 6, 0], "to": [4, 4, 0]}, black)["success"])
 
-        state = self.call(new_port, f"/api/game/state?game={game}", seat=black)
+        old.send_signal(signal.SIGTERM)
+        self.assertEqual(old.wait(timeout=40), 0)
+        self.assertEqual(self.call(new_port, "/api/health")["taken_over"], {"pulled": 1, "pushed": 1})
+
+        state = self.call(new_port, f"/api/game/state?game={game}", seat=white)
         self.assertTrue(state["success"], state)
-        self.assertEqual((state["online"]["you"], state["current_player"], len(state["move_history"])), ("black", "black", 1))
-        moved = self.call(new_port, f"/api/game/move?game={game}", {"from": [4, 6, 0], "to": [4, 4, 0]}, black)
+        self.assertEqual((state["online"]["you"], state["current_player"], len(state["move_history"])), ("white", "white", 2))
+        moved = self.call(new_port, f"/api/game/move?game={game}", {"from": [3, 1, 0], "to": [3, 3, 0]}, white)
         self.assertTrue(moved["success"], moved)
 
     def test_the_handoff_needs_the_key(self):

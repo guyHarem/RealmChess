@@ -129,10 +129,12 @@ venv/bin/python serve.py                       # then open http://localhost:8000
   line is full a computer move is answered with `busy: true` and the page asks again.
 
 It is a single process on purpose: games live in its memory, and running two copies would
-give each its own set of games. When the server is replaced (a deploy), the old one hands its
-games to the new one as it stops, so they carry on (`api/handoff.py`): it sends them, as
-starting options plus moves, to `REALMCHESS_HANDOFF_URL` (default `RENDER_EXTERNAL_URL`), and
-the new server replays them. Both need the same secret in `REALMCHESS_HANDOFF_KEY`; without it
+give each its own set of games. When the server is replaced (a deploy), the games carry on
+(`api/handoff.py`): the new server, before it answers the health check, asks the old one for
+them through the public address `REALMCHESS_HANDOFF_URL` (default `RENDER_EXTERNAL_URL`), and
+the old one sends them again as it stops, for the moves made in between, retrying for up to
+`REALMCHESS_HANDOFF_PATIENCE` seconds (25) while the address still leads back to itself. Games
+travel as starting options plus moves, and the new server replays them. Both need the same secret in `REALMCHESS_HANDOFF_KEY`; without it
 nothing is handed over. For its first minute the new server waits briefly before calling an
 unknown game gone, in case it is still on its way. A crash still ends the games. Settings are
 environment variables: `PORT` (8000), `HOST` (0.0.0.0), `REALMCHESS_THINKERS`, the two above, and

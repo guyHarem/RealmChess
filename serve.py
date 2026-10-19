@@ -32,7 +32,7 @@ def start(host, port, thinkers=None):
     from waitress import serve
 
     from api import handoff
-    from api.app import app, rooms
+    from api.app import app, arrival, rooms
     from api.thinker import ProcessThinker, default_workers
 
     workers = thinkers or default_workers()
@@ -48,6 +48,10 @@ def start(host, port, thinkers=None):
             print(f"handoff: {e}", flush=True)
         raise SystemExit(0)
     signal.signal(signal.SIGTERM, stop)   # how a host stops the server; waitress then winds down
+
+    # A deploy: the old server is still the one visitors reach; take its games before this one
+    # answers the host's health check (api/handoff.py)
+    handoff.pull(rooms, arrival)
 
     print(f"Serving on http://{host}:{port} with {workers} computer thinker(s)", flush=True)
     try:

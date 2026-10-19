@@ -8,7 +8,8 @@ import MoveList from '../components/MoveList.jsx'
 import PlayerCard from '../components/PlayerCard.jsx'
 import { FULL_BOARD, LAYERS, capturedBy, capturedPoints, keyOf, layerOf, layersOf, otherColor, parsePiece } from '../lib/chess.js'
 import { navigate } from '../lib/router.js'
-import { clockRequest, computerRequest, levelName, loadSettings } from '../lib/settings.js'
+import { clockRequest, computerRequest, levelName, loadSettings, saveSettings } from '../lib/settings.js'
+import { playSound } from '../lib/sound.js'
 import { useGame } from '../lib/useGame.js'
 import { usePhone } from '../lib/usePhone.js'
 
@@ -61,7 +62,7 @@ export default function Game({ id, joinSide = null }) {
     game, selected, legalMoves, error, gone, clickCell, newGame, undo, promote, resign, agreeDraw, refresh, computerMove,
     offer, answer,
   } = useGame(id, joinSide)
-  const [settings] = useState(loadSettings)
+  const [settings, setSettings] = useState(loadSettings)
   const [flipped, setFlipped] = useState(false)
   const [activeLayer, setActiveLayer] = useState(0)
   const [spread, setSpread] = useState(false)
@@ -124,6 +125,30 @@ export default function Game({ id, joinSide = null }) {
   }
 
   const send = (type, direction) => setCommand({ id: Date.now(), type, direction })
+
+  // A sound for every new move (not for the moves already there when the page opens, nor for
+  // take-backs), and one when the game ends
+  const heard = useRef(null) // { moves, over } as last heard
+  const over = !!outcome
+  useEffect(() => {
+    if (!game) return
+    const moves = game.move_history
+    const before = heard.current
+    heard.current = { moves: moves.length, over }
+    if (!before || !settings.sound) return
+    if (over && !before.over) playSound('end')
+    // (a promotion is its own history entry after the pawn's move, which already sounded)
+    else if (moves.length > before.moves && !over && moves.at(-1).special_move !== 'promotion') {
+      playSound(moves.at(-1).captured_piece ? 'capture' : game.status === 'check' ? 'check' : 'move')
+    }
+  }, [game, over, settings.sound])
+
+  function toggleSound() {
+    const next = { ...settings, sound: !settings.sound }
+    setSettings(next)
+    saveSettings(next)
+    if (next.sound) playSound('move') // and the first tap is what lets the browser play sound
+  }
 
   // On the computer's turn, ask the server for its move. The short wait lets your own move
   // be seen first. One request at a time; when it comes back the effect runs again, which
@@ -590,6 +615,9 @@ export default function Game({ id, joinSide = null }) {
       </button>
       <button type="button" className={`button ${solo ? 'is-on' : ''}`} aria-pressed={solo} onClick={() => setSolo(!solo)}>
         Only this layer
+      </button>
+      <button type="button" className={`button ${settings.sound ? 'is-on' : ''}`} aria-pressed={settings.sound} onClick={toggleSound}>
+        Sound
       </button>
     </div>
   )

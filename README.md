@@ -2,9 +2,9 @@
 
 A 3D chess variant on five stacked 8×8 boards. This is a **work in progress (WIP)**.
 
-It was called CubeChess until October 2026. The site will be at [realmchess.com](https://realmchess.com).
+It was called CubeChess until October 2026. Play it at [realmchess.com](https://realmchess.com).
 
-## Project Status: Phase 1 Complete ✅
+## Project Status: live, still growing
 
 ### Phase 1: Backend Engine & API (COMPLETE)
 - ✅ **Chess Engine** (`engine/`) — Full 3D chess rules
@@ -23,7 +23,7 @@ It was called CubeChess until October 2026. The site will be at [realmchess.com]
   - JSON serialization utilities
   - CORS enabled for frontend
 
-### Phase 2: Frontend UI (WIP)
+### Phase 2: Frontend UI (COMPLETE)
 - ✅ Home page, game setup and the game screen (local two-player)
 - ✅ Three.js 3D board: cube-shaped cells, 3D pieces, layer tools, camera controls
 - ✅ Move list, captured material, chess clock with increment, undo, resign and draw by agreement
@@ -35,12 +35,16 @@ It was called CubeChess until October 2026. The site will be at [realmchess.com]
   computer, or online (2 against 2, or a team against the computer)
 - ✅ Phone layout: the game, lessons and puzzles fit one upright phone screen (3D board on top,
   top view below for tapping, the rest behind a Menu button)
-- ⏳ Hosting (so far it runs on your own machine and network)
+- ✅ Finished lessons, solved puzzles and setup choices are remembered in the browser
+- ✅ Sounds for moves, captures, check and the end of a game (with a Sound switch); the piece
+  just moved glides to its new cell
 - 🔧 Developer test bench at `#/bench` for checking backend behavior
 
-### Phase 3: Polish & Deployment (Not Started)
-- 🔄 Testing suite (engine + API covered in `tests/`)
-- ⏳ Deployment
+### Phase 3: Polish & Deployment
+- ✅ Hosted on Render at realmchess.com; a deploy hands the games in progress to the new server
+- ✅ Link previews and home-screen icons (`realmchess-frontend/dev/share-images.html`)
+- ✅ Testing suite: engine, computer player, API, online and team play, hosting (`tests/`)
+- ⏳ Games that survive a crash (would need storage that outlives the server, which costs extra)
 
 ---
 
@@ -98,7 +102,7 @@ npm run dev
 # App runs on http://localhost:5173 (Vite picks the next free port if that one is taken)
 ```
 
-### Hosting (not deployed yet)
+### Hosting
 
 Everything above is for your own machine. To run the game for real visitors there is a second
 way to start it, which can be tried locally:
@@ -413,4 +417,4 @@ See [IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md) for detailed technical sp
 
 ---
 
-**Status:** Phase 1 (Backend) complete. Phase 2 (Frontend) in progress.
+**Status:** live at realmchess.com. Engine, computer player, pages, online and team play done.

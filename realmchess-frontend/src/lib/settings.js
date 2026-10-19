@@ -9,6 +9,7 @@ export const DEFAULT_SETTINGS = {
   rocks: true,
   showLegalMoves: true,
   allowUndo: true,
+  sound: true,
   moveLimit: 50,
   clock: { mode: 'none', minutes: 10, increment: 0 }, // minutes and increment are used by mode 'custom'
 }

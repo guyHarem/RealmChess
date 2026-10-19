@@ -10,6 +10,7 @@ import { createMoveBall, createPiece, createRock } from '../pieces3d.js'
 
 const FLAT = [-Math.PI / 2, 0, 0]
 const SPREAD_GAP = 1.15 // extra space between layers when they are spread apart
+const GLIDE_MS = 320 // how long the piece just moved takes to travel to its new cell
 
 // Click priority: a legal-move target beats anything on the current layer, which beats the rest
 const TARGET = 2
@@ -156,9 +157,31 @@ function Slab({ layer, y, size, active, isTop, onFloorClick }) {
   )
 }
 
-function Model({ build, position, rank, onClick }) {
+// `from`: where the piece just moved from. It then glides from there to `position` once, with a
+// small hop so it passes over the pieces in between.
+function Model({ build, position, rank, onClick, from }) {
   const object = useMemo(() => build(), [build])
-  return <primitive object={object} position={position} userData-rank={rank} onClick={onClick} />
+  const glide = useRef(from ? { from, started: null } : null)
+  const [x, y, z] = position
+
+  useLayoutEffect(() => {
+    if (glide.current) object.position.set(...glide.current.from)
+    else object.position.set(x, y, z)
+  }, [object, x, y, z])
+
+  useFrame(() => {
+    const move = glide.current
+    if (!move) return
+    move.started ??= performance.now()
+    const t = Math.min(1, (performance.now() - move.started) / GLIDE_MS)
+    const eased = 1 - (1 - t) ** 3
+    const hop = Math.sin(Math.PI * t) * 0.45
+    const [fx, fy, fz] = move.from
+    object.position.set(fx + (x - fx) * eased, fy + (y - fy) * eased + hop, fz + (z - fz) * eased)
+    if (t === 1) glide.current = null
+  })
+
+  return <primitive object={object} userData-rank={rank} onClick={onClick} />
 }
 
 function Ring({ position, color }) {
@@ -323,6 +346,9 @@ function Scene({
   const visible = (z) => !solo || z === activeLayer
   const isLegal = (coord) => legalMoves.some((move) => sameCoord(move, coord))
   const rankFor = (coord) => (isLegal(coord) ? TARGET : coord[2] === activeLayer ? ON_LAYER : OTHER)
+  // The piece that has just arrived glides in from where it was (only read when it first appears)
+  const glidesFrom = (coord) =>
+    interactive && lastMove && sameCoord(coord, lastMove.to) && visible(lastMove.from[2]) ? cellPosition(lastMove.from) : undefined
 
   const home = useMemo(
     () => ({
@@ -374,6 +400,7 @@ function Scene({
             key={`${item.key}-${item.type}-${item.color}`}
             build={pieceBuilder(item.type, item.color)}
             position={cellPosition(item.coord)}
+            from={glidesFrom(item.coord)}
             rank={rankFor(item.coord)}
             onClick={clickOn(item.coord, rankFor(item.coord))}
           />

@@ -5,21 +5,14 @@ import CubeBoard from '../components/CubeBoard.jsx'
 import LayerMap from '../components/LayerMap.jsx'
 import Logo from '../components/Logo.jsx'
 import { LAYERS, keyOf, layerOf, layersOf, parsePiece, sameCoord } from '../lib/chess.js'
+import { LESSONS as LESSON_PROGRESS, addId, loadIds } from '../lib/progress.js'
 import { useGame } from '../lib/useGame.js'
 import course from '../lessons.json'
 
 const LESSONS = course.lessons
 const BOARD = course.board
 const BOARD_LAYERS = layersOf(BOARD)
-const STORE = 'realmchess.lessons'
-
-function loadDone() {
-  try {
-    return JSON.parse(sessionStorage.getItem(STORE) ?? '[]')
-  } catch {
-    return []
-  }
-}
+const loadDone = () => loadIds(LESSON_PROGRESS)
 
 export default function Learn() {
   const { game, selected, legalMoves, error, clickCell, clearSelection, select, setup } = useGame('practice')
@@ -64,15 +57,7 @@ export default function Learn() {
   }
 
   function finishLesson() {
-    if (!done.includes(lesson.id)) {
-      const next = [...done, lesson.id]
-      setDone(next)
-      try {
-        sessionStorage.setItem(STORE, JSON.stringify(next))
-      } catch {
-        // Progress is only a convenience; carry on without it
-      }
-    }
+    if (!done.includes(lesson.id)) setDone(addId(LESSON_PROGRESS, lesson.id))
   }
 
   async function onCellClick(coord) {

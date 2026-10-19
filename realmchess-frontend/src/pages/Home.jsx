@@ -1,8 +1,11 @@
+import { useState } from 'react'
 import CubeBoard from '../components/CubeBoard.jsx'
 import { LogoMark } from '../components/Logo.jsx'
 import { LESSON_BOARD, LESSON_MOVES, PUZZLE_BOARD, SMALL_BOARD, START_BOARD } from '../lib/chess.js'
+import { LESSONS, PUZZLES, clearProgress, loadIds } from '../lib/progress.js'
 
 export default function Home() {
+  const [started, setStarted] = useState(() => loadIds(LESSONS).length + loadIds(PUZZLES).length > 0)
   return (
     <div className="page home">
       <main className="home-main">
@@ -53,7 +56,23 @@ export default function Home() {
           </a>
         </div>
 
-        <p className="home-note">Progress is not saved yet. It resets when you close the page.</p>
+        <p className="home-note">
+          {started
+            ? 'This browser remembers the lessons and puzzles you finish. '
+            : 'This browser will remember the lessons and puzzles you finish. '}
+          {started && (
+            <button
+              type="button"
+              className="link-button"
+              onClick={() => {
+                clearProgress()
+                setStarted(false)
+              }}
+            >
+              Start over
+            </button>
+          )}
+        </p>
       </main>
     </div>
   )

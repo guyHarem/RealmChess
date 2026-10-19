@@ -6,21 +6,15 @@ import LayerMap from '../components/LayerMap.jsx'
 import LayerPicker from '../components/LayerPicker.jsx'
 import Logo from '../components/Logo.jsx'
 import { boardFromPieces, keyOf, layerOf, layersOf, parsePiece, sameCoord } from '../lib/chess.js'
+import { PUZZLES, addId, loadIds } from '../lib/progress.js'
 import { useGame } from '../lib/useGame.js'
 import collection from '../scenarios.json'
 
 const TIERS = collection.tiers
 const ALL = TIERS.flatMap((tier) => tier.scenarios.map((scenario, index) => ({ ...scenario, tier, number: index + 1 })))
-const STORE = 'realmchess.scenarios'
 const GOALS = { 1: 'Checkmate in one move.', 2: 'Checkmate in two moves.' }
 
-function loadSolved() {
-  try {
-    return JSON.parse(sessionStorage.getItem(STORE) ?? '[]')
-  } catch {
-    return []
-  }
-}
+const loadSolved = () => loadIds(PUZZLES)
 
 function Header({ back }) {
   return (
@@ -146,14 +140,7 @@ function Play({ scenario }) {
   function markSolved() {
     setPhase('solved')
     setJustSolved(true)
-    const solved = loadSolved()
-    if (!solved.includes(scenario.id)) {
-      try {
-        sessionStorage.setItem(STORE, JSON.stringify([...solved, scenario.id]))
-      } catch {
-        // Progress is only a convenience; carry on without it
-      }
-    }
+    addId(PUZZLES, scenario.id)
   }
 
   // The moves that are right at this point: the key move, then any of the mating moves

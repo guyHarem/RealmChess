@@ -1,4 +1,4 @@
-// Game setup choices. Kept for the browser tab only: nothing is saved between visits yet.
+// Game setup choices, remembered in this browser between visits
 
 export const DEFAULT_SETTINGS = {
   opponent: 'local', // 'local' (two players on this screen), 'computer' or 'online'
@@ -52,7 +52,7 @@ const KEY = 'realmchess.settings'
 
 export function loadSettings() {
   try {
-    return { ...DEFAULT_SETTINGS, ...JSON.parse(sessionStorage.getItem(KEY) ?? '{}') }
+    return { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem(KEY) ?? sessionStorage.getItem(KEY) ?? '{}') }
   } catch {
     return { ...DEFAULT_SETTINGS }
   }
@@ -60,7 +60,7 @@ export function loadSettings() {
 
 export function saveSettings(settings) {
   try {
-    sessionStorage.setItem(KEY, JSON.stringify(settings))
+    localStorage.setItem(KEY, JSON.stringify(settings))
   } catch {
     // Storage can be unavailable (private windows); the game still works with defaults
   }

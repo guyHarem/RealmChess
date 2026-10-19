@@ -11,6 +11,7 @@ import { createMoveBall, createPiece, createRock } from '../pieces3d.js'
 const FLAT = [-Math.PI / 2, 0, 0]
 const SPREAD_GAP = 1.15 // extra space between layers when they are spread apart
 const GLIDE_MS = 320 // how long the piece just moved takes to travel to its new cell
+const FADE_MS = 420 // how long a captured piece takes to vanish (it waits for the attacker first)
 
 // Click priority: a legal-move target beats anything on the current layer, which beats the rest
 const TARGET = 2
@@ -184,6 +185,65 @@ function Model({ build, position, rank, onClick, from }) {
   return <primitive object={object} userData-rank={rank} onClick={onClick} />
 }
 
+// A captured piece, shrinking and fading where it stood while the attacker arrives. It is
+// drawn from a fresh copy of the piece, so fading it touches no other piece's material.
+function Ghost({ type, color, position }) {
+  const object = useMemo(() => {
+    const piece = createPiece(type, color)
+    piece.traverse((node) => {
+      if (node.material) Object.assign(node.material, { transparent: true, depthWrite: false })
+    })
+    return piece
+  }, [type, color])
+  const started = useRef(null)
+  const gone = useRef(false)
+
+  useEffect(
+    () => () =>
+      object.traverse((node) => {
+        node.material?.dispose()
+      }),
+    [object],
+  )
+
+  useFrame(() => {
+    if (gone.current) return
+    started.current ??= performance.now()
+    const t = Math.min(1, (performance.now() - started.current) / FADE_MS)
+    const fade = t < 0.45 ? 0 : (t - 0.45) / 0.55 // stand still until the attacker is nearly there
+    object.scale.setScalar(1 - 0.75 * fade)
+    object.traverse((node) => {
+      if (node.material) node.material.opacity = 1 - fade
+    })
+    if (t === 1) {
+      object.scale.setScalar(0)
+      gone.current = true
+    }
+  })
+
+  return <primitive object={object} position={position} raycast={() => null} />
+}
+
+// Under a king in check: a red disc that pulses, so a check from another layer is seen at once
+function CheckPulse({ position }) {
+  const disc = useRef(null)
+  useFrame(({ clock }) => {
+    if (disc.current) disc.current.material.opacity = 0.32 + 0.22 * Math.sin(clock.elapsedTime * 5)
+  })
+  return (
+    <group position={[position[0], position[1] + 0.02, position[2]]} rotation={FLAT}>
+      <mesh ref={disc}>
+        <circleGeometry args={[0.46, 48]} />
+        <meshBasicMaterial color="#FF5A4F" transparent opacity={0.45} depthWrite={false} toneMapped={false} />
+      </mesh>
+      <mesh>
+        <torusGeometry args={[0.46, 0.035, 10, 48]} />
+        <meshBasicMaterial color="#FF5A4F" toneMapped={false} />
+      </mesh>
+    </group>
+  )
+}
+
 function Ring({ position, color }) {
   return (
     <mesh position={[position[0], position[1] + 0.03, position[2]]} rotation={FLAT}>
@@ -329,6 +389,7 @@ function Scene({
   legalMoves,
   goal,
   lastMove,
+  check,
   showMoveBalls,
   spread,
   solo,
@@ -407,6 +468,15 @@ function Scene({
         ),
       )}
 
+      {interactive && lastMove?.captured && visible(lastMove.to[2]) && (
+        <Ghost
+          key={`ghost-${lastMove.index}`}
+          type={lastMove.captured.type}
+          color={lastMove.captured.color}
+          position={cellPosition(lastMove.to)}
+        />
+      )}
+      {check && visible(check[2]) && <CheckPulse position={cellPosition(check)} />}
       {lastMove && visible(lastMove.from[2]) && <MovePad position={cellPosition(lastMove.from)} />}
       {lastMove && visible(lastMove.to[2]) && <MovePad position={cellPosition(lastMove.to)} arrived />}
       {goal && visible(goal[2]) && <GoalPad position={cellPosition(goal)} />}
@@ -438,7 +508,8 @@ export default function CubeBoard({
   selected = null,
   legalMoves = [],
   goal = null,
-  lastMove = null,
+  lastMove = null, // { from, to, index (in the move history), captured: { type, color } or null }
+  check = null, // the cell of a king in check
   showMoveBalls = true,
   spread = false,
   solo = false,
@@ -463,6 +534,7 @@ export default function CubeBoard({
         legalMoves={legalMoves}
         goal={goal}
         lastMove={lastMove}
+        check={check}
         showMoveBalls={showMoveBalls}
         spread={spread}
         solo={solo}

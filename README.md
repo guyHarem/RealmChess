@@ -37,7 +37,8 @@ It was called CubeChess until October 2026. Play it at [realmchess.com](https://
   top view below for tapping, the rest behind a Menu button)
 - ✅ Finished lessons, solved puzzles and setup choices are remembered in the browser
 - ✅ Sounds for moves, captures, check and the end of a game (with a Sound switch); the piece
-  just moved glides to its new cell
+  just moved glides to its new cell, a captured piece fades away, and a red pulse marks a king
+  in check on the 3D board
 - 🔧 Developer test bench at `#/bench` for checking backend behavior
 
 ### Phase 3: Polish & Deployment

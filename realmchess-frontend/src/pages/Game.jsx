@@ -109,7 +109,19 @@ export default function Game({ id, joinSide = null }) {
   const side = flipped ? otherColor(mine) : mine
   // The move just played, for the marker on the board (a promotion is recorded after its pawn move)
   const lastEntry = [...history].reverse().find((entry) => entry.special_move !== 'promotion')
-  const lastMove = lastEntry ? { from: lastEntry.from, to: lastEntry.to } : null
+  // What it captured, for the 3D board to fade out (not en passant: that pawn stood elsewhere)
+  const lastMove = lastEntry
+    ? {
+        from: lastEntry.from,
+        to: lastEntry.to,
+        index: history.lastIndexOf(lastEntry),
+        captured: lastEntry.special_move === 'en_passant' ? null : parsePiece(lastEntry.captured_piece),
+      }
+    : null
+  // The king of the side to move, while it is in check (or checkmated)
+  const inCheck = game?.status === 'check' || game?.status === 'checkmate'
+  const checkKey = inCheck ? Object.keys(board).find((key) => board[key] === `King(${player})`) : null
+  const check = checkKey ? JSON.parse(checkKey) : null
   const captured = capturedBy(history)
   const points = capturedPoints(captured)
   const size = game?.board_size?.size ?? FULL_BOARD.size
@@ -399,6 +411,7 @@ export default function Game({ id, joinSide = null }) {
         selected={selected}
         legalMoves={legalMoves}
         lastMove={lastMove}
+        check={check}
         showMoveBalls={settings.showLegalMoves}
         spread={spread}
         solo={solo}

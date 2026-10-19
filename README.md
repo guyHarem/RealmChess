@@ -407,11 +407,14 @@ This project is built with a learning-first approach:
 
 ## Next Steps
 
-1. ✅ Build basic 2D board display (React)
-2. ✅ Connect API for move execution
-3. ✅ Test all game logic through UI
-4. ✅ Add Three.js for 3D visualization
-5. ✅ Polish UI/UX
+1. Re-tune the computer player for the 24-piece start (`tools/tune.py`, self-play); its
+   scoring was tuned before the Space and Abyss pawns
+2. A way for online teammates to talk (short messages or suggested moves)
+3. A lesson on the edge layers: the Space and Abyss pawns, and how pawns change layer
+4. The setup page fitting one phone screen, like the other pages
+5. Animations for castling (the rook) and for moves taken back
+6. Later, once people play: accounts, ratings and finding an opponent; games that survive a
+   crash (needs storage that outlives the server, which costs extra on Render)
 
 ---
 

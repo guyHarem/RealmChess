@@ -193,8 +193,8 @@ The computer is not trained; it plays like a classic chess program (`ai/`):
 3. It scores the positions it reaches (`ai/evaluate.py`) by material, by where each piece
    stands, and by how close its pieces are to the enemy king. Against a bare king it also
    scores cornering: the fewer squares that king can step to and the closer the attacker's
-   own king, the better. The numbers were tuned by self-play: pawn 1, knight 3.3, bishop 3.7,
-   rook 4.25, queen 12.2, and a pawn two steps from promotion is worth about 4.
+   own king, the better. The numbers were tuned by self-play: pawn 1, knight 3.1, bishop 3.7,
+   rook 4.3, queen 12.2, and a pawn two steps from promotion is worth about 3.7.
 
 | Level | Looks ahead | Picks |
 |---|---|---|

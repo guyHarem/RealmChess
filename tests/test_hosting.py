@@ -11,6 +11,7 @@ import sys
 import tempfile
 import time
 import unittest
+import unittest.mock
 import urllib.request
 
 from api import app as app_module
@@ -93,7 +94,12 @@ class TestLockedDown(HostedTestCase):
 
     def test_health_check(self):
         # ... which also says who the server takes the caller for (the test client's address)
-        self.assertEqual(self.client.get('/api/health').get_json(), {"success": True, "visitor": "127.0.0.1"})
+        # ... and whether it can take over games on a deploy
+        with unittest.mock.patch.dict(os.environ, {"REALMCHESS_HANDOFF_KEY": ""}):
+            self.assertEqual(self.client.get('/api/health').get_json(),
+                             {"success": True, "visitor": "127.0.0.1", "handoff": False})
+        with unittest.mock.patch.dict(os.environ, {"REALMCHESS_HANDOFF_KEY": "secret"}):
+            self.assertTrue(self.client.get('/api/health').get_json()["handoff"])
         app.config["PRODUCTION"] = False
         self.assertEqual(self.client.get('/api/health').get_json(), {"success": True})
 

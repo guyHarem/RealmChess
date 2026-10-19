@@ -139,8 +139,9 @@ environment variables: `PORT` (8000), `HOST` (0.0.0.0), `REALMCHESS_THINKERS`, t
 `REALMCHESS_TRUST_PROXY`: how many proxies stand in front of the server (default 1, `0` for
 none). Each proxy adds the address it heard from to the end of `X-Forwarded-For`, so the
 visitor is that many entries from the end. `GET /api/health` is for a host's health check;
-hosted, it answers `{"success": true, "visitor": "<address>"}` with the address the server
-takes the caller for, which is how to check the proxy count on a new host.
+hosted, it answers `{"success": true, "visitor": "<address>", "handoff": true}` with the
+address the server takes the caller for, which is how to check the proxy count on a new host,
+and whether it has `REALMCHESS_HANDOFF_KEY`.
 
 #### On Render
 

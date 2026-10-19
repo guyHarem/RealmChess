@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from flask import Flask, request, jsonify, g, send_from_directory
 from flask_cors import CORS
 from werkzeug.middleware.proxy_fix import ProxyFix
-from api.handoff import Arrival, key_matches
+from api.handoff import Arrival, key as handoff_key, key_matches
 from api.limits import Limiter, Slots
 from api.rooms import Rooms
 from api.utils import convert_response
@@ -442,9 +442,11 @@ def take_handoff():
 def health():
     """For a hosting provider to check that the server is up. Hosted, it also says which
     address it takes the caller for: that is how to check REALMCHESS_TRUST_PROXY on a new
-    host, since the limits per visitor go by this address."""
+    host, since the limits per visitor go by this address. And whether REALMCHESS_HANDOFF_KEY
+    is set, without which a deploy ends the games in progress."""
     if hosted():
-        return jsonify({"success": True, "visitor": visitor()})
+        # "handoff": whether this server has the key to take over games on a deploy (not the key)
+        return jsonify({"success": True, "visitor": visitor(), "handoff": handoff_key() is not None})
     return jsonify({"success": True})
 
 

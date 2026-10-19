@@ -68,6 +68,7 @@ def snapshot(room):
             "id": room.id,
             "kind": room.kind,
             "seats": dict(room.seats),
+            "teams": room.teams,
             "offer": dict(room.offer) if room.offer is not None else None,
             "options": manager.options,
             "moves": moves,
@@ -109,6 +110,7 @@ def restore(rooms, data):
             manager.result = data["result"]
             manager._version = data["version"] + 1   # pages drop answers older than what they show
             room.seats = dict(data["seats"])
+            room.teams = bool(data.get("teams"))
             room.offer = data["offer"]
             room.revision = data["revision"] + 1
             for seat in room.seats:

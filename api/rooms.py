@@ -4,8 +4,12 @@ Rooms: every game on the server lives in its own room with its own address.
 A room is one GameManager plus what an online game needs on top of the rules: who sits on
 which side, whether they are still connected, and a pending draw or take-back offer.
 
-There are no accounts. Sitting down gives the browser a secret key for that color; the
+There are no accounts. Sitting down gives the browser a secret key for that seat; the
 server lets only the holder of White's key move White.
+
+In a team game two players share each army and take turns with it: White's first player
+moves, then Black's first, then White's second, Black's second, and round again. Their seats
+are "white" and "white2" ("black", "black2"). A side the computer plays has no seats.
 """
 import secrets
 import time
@@ -29,43 +33,66 @@ class Room:
         self.offer = None        # {"kind": "draw" or "takeback", "by": color}, or None
         self.revision = 0        # goes up when the seats or the offer change
         self.permanent = False
+        self.teams = False       # two players a side, taking turns with the army
         self._now = now
         self.touched = now()
 
     # ==================== SEATS ====================
 
-    def color_of(self, key):
-        """The color this key sits on, or None for a visitor who is only watching"""
+    def seat_ids(self):
+        """Every seat of this game, in the order visitors are given them"""
+        computer = self.manager.computer["color"] if self.manager.computer else None
+        order = ("white", "black", "white2", "black2") if self.teams else ("white", "black")
+        return [seat for seat in order if seat[:5] != computer]
+
+    def seat_of(self, key):
+        """The seat this key sits on, or None for a visitor who is only watching"""
         if key:
-            for color, seat_key in self.seats.items():
+            for seat, seat_key in self.seats.items():
                 if secrets.compare_digest(seat_key, key):
-                    return color
+                    return seat
         return None
 
-    def sit(self, color):
+    def color_of(self, key):
+        """The color this key plays, or None for a visitor who is only watching"""
+        seat = self.seat_of(key)
+        return seat[:5] if seat else None
+
+    def sit(self, seat):
         """Give out the key for a free seat"""
         key = secrets.token_urlsafe(18)
-        self.seats[color] = key
-        self.last_seen[color] = self._now()
+        self.seats[seat] = key
+        self.last_seen[seat] = self._now()
         self.revision += 1
         return key
 
-    def join(self, key):
-        """A visitor arrives. Returns (key, color): their existing seat, a free one, or
-        (None, None) when both seats are taken and they can only watch."""
+    def join(self, key, side=None):
+        """A visitor arrives, wanting to play `side` ("white", "black" or None for any).
+        Returns (key, seat): their existing seat, a free one, or (None, None) when there is
+        none and they can only watch."""
         with self.manager.lock:
-            color = self.color_of(key)
-            if color is not None:
-                return key, color
-            for color in ("white", "black"):
-                if color not in self.seats:
-                    return self.sit(color), color
+            seat = self.seat_of(key)
+            if seat is not None:
+                return key, seat
+            for seat in self.seat_ids():
+                if seat not in self.seats and (side is None or seat[:5] == side):
+                    return self.sit(seat), seat
             return None, None
 
-    def seen(self, color):
+    def turn_seat(self):
+        """The seat whose move it is: the color to move, and in a team game which of its two
+        players. Each completed turn counts, so taking moves back hands the turn back too."""
+        game = self.manager.game
+        color = game.current_player
+        if not self.teams:
+            return color
+        turns = len(game._position_keys) - 1
+        return color + ("2" if (turns // 2) % 2 else "")
+
+    def seen(self, seat):
         self.touched = self._now()
-        if color is not None:
-            self.last_seen[color] = self.touched
+        if seat is not None:
+            self.last_seen[seat] = self.touched
 
     # ==================== OFFERS ====================
 
@@ -89,12 +116,25 @@ class Room:
                 raise ValueError("The game is over")
             if self.manager.game.pending_promotion is not None:
                 raise ValueError("Finish the promotion first")
+            if self.manager.computer is not None:
+                return self._ask_the_computer(kind)
             if self.offer is not None and self.offer["kind"] == kind and self.offer["by"] == other(color):
                 return self.answer(color, True)
             if kind == "takeback" and self._plies_to_take_back(color) == 0:
                 raise ValueError("You have no move to take back")
             self.offer = {"kind": kind, "by": color}
             self.revision += 1
+
+    def _ask_the_computer(self, kind):
+        """A team playing the computer online: it answers a draw offer itself, and a take-back
+        needs nobody's leave (as on one screen)"""
+        if kind == "draw":
+            response = self.manager.agree_draw()
+            if not response["success"]:
+                raise ValueError(response["error"])
+        elif not self.manager.undo_move()["success"]:
+            raise ValueError("You have no move to take back")
+        self.revision += 1
 
     def answer(self, color, accept):
         """Accept or decline the opponent's offer; the player who made it can withdraw it"""
@@ -130,14 +170,16 @@ class Room:
         """Changes whenever anything a page shows could have changed"""
         return f"{self.manager._version}-{self.revision}"
 
-    def describe(self, color):
+    def describe(self, seat):
         """The online part of a game-state reply, for the player (or watcher) asking"""
         now = self._now()
+        seats = self.seat_ids()
         return {
-            "you": color,
-            "seats": {side: side in self.seats for side in ("white", "black")},
-            "connected": {side: side in self.seats and now - self.last_seen.get(side, -1e9) <= CONNECTED_SECONDS
-                          for side in ("white", "black")},
+            "you": seat[:5] if seat else None,
+            "seat": seat,
+            "seats": {each: each in self.seats for each in seats},
+            "connected": {each: each in self.seats and now - self.last_seen.get(each, -1e9) <= CONNECTED_SECONDS
+                          for each in seats},
             "offer": dict(self.offer) if self.offer is not None else None,
         }
 

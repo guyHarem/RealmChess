@@ -96,8 +96,9 @@ def choose_game():
     g.room = room
     g.manager = room.manager
     # The secret key a seated player sends with every request; None for anyone else
-    g.color = room.color_of(request.headers.get("X-Seat"))
-    room.seen(g.color)
+    g.seat = room.seat_of(request.headers.get("X-Seat"))
+    g.color = g.seat[:5] if g.seat else None
+    room.seen(g.seat)
     return None
 
 
@@ -111,7 +112,9 @@ def reply(response, **extra):
         response["game_id"] = room.id
         response["kind"] = room.kind
         response["stamp"] = room.stamp()
-        response["online"] = room.describe(g.color) if room.kind == "online" else None
+        response["online"] = room.describe(g.seat) if room.kind == "online" else None
+        # A team game: whose turn it is within the team to move ("white2": White's second player)
+        response["teams"] = {"turn": room.turn_seat()} if room.teams else None
     return jsonify(response), status_code
 
 
@@ -151,6 +154,8 @@ def open_game():
     """Open a new room and start a game in it. Body: {"kind": "local" | "computer" | "online" | "practice"}
     plus the options of /api/game/new. An online game also takes "side": the color the
     creator plays ("white" by default); the answer then carries the creator's secret "seat" key.
+    "teams": true makes it a team game: two players a side taking turns with the army (on one
+    screen, against the computer, or online, where a team may also play the computer).
     The answer's "game_id" is the room: pass it as ?game=<game_id> from then on."""
     if hosted() and not limits["new_games"].allow(visitor()):
         return too_many()
@@ -159,19 +164,26 @@ def open_game():
     side = data.get("side", "white")
     if kind == "online" and side not in ("white", "black"):
         return refuse('side must be "white" or "black"')
-    if (kind == "computer") != (data.get("computer") is not None):
-        return refuse("A computer game needs the computer's color and level, and only a computer game takes them")
+    if kind == "computer" and data.get("computer") is None:
+        return refuse("A computer game needs the computer's color and level")
+    if data.get("computer") is not None and not (kind == "computer" or (kind == "online" and data.get("teams"))):
+        return refuse("Only a computer game, or a team playing the computer online, takes a computer")
+    if kind == "practice" and data.get("teams"):
+        return refuse("Practice boards have no teams")
+    if kind == "online" and data.get("computer") is not None and data["computer"].get("color") == side:
+        return refuse("The computer plays the other side")
     try:
         room = rooms.create(kind)
     except ValueError as e:
         return refuse(str(e))
-    g.room, g.manager, g.color = room, room.manager, None
+    room.teams = bool(data.get("teams"))
+    g.room, g.manager, g.seat, g.color = room, room.manager, None, None
     response = start(room.manager, data)
     if not response.get("success"):
         return reply(response)
     if kind == "online":
         seat = room.sit(side)
-        g.color = side
+        g.seat, g.color = side, side
         return reply(response, seat=seat)
     return reply(response)
 
@@ -186,12 +198,17 @@ def new_game():
 
 @app.route('/api/game/join', methods=['POST'])
 def join_game():
-    """Open an online game's link: take the free seat if there is one. The answer carries
-    "seat" (your secret key) when you are a player; without it you are watching."""
+    """Open an online game's link: take a free seat if there is one, on the side given as
+    {"side": "white" | "black"} if any. The answer carries "seat" (your secret key) when you
+    are a player; without it you are watching."""
     if not online():
         return refuse("Only online games are joined")
-    seat, g.color = g.room.join(request.headers.get("X-Seat"))
-    g.room.seen(g.color)
+    side = (request.get_json(silent=True) or {}).get("side")
+    if side not in (None, "white", "black"):
+        return refuse('side must be "white" or "black"')
+    seat, g.seat = g.room.join(request.headers.get("X-Seat"), side)
+    g.color = g.seat[:5] if g.seat else None
+    g.room.seen(g.seat)
     return reply(g.manager.get_state(), seat=seat)
 
 
@@ -205,7 +222,8 @@ def get_state():
     response = g.manager.get_state()
     if request.args.get("since") == g.room.stamp():
         return jsonify({"success": True, "unchanged": True, "stamp": g.room.stamp(), "clock": response["clock"],
-                        "online": g.room.describe(g.color) if online() else None})
+                        "online": g.room.describe(g.seat) if online() else None,
+                        "teams": {"turn": g.room.turn_seat()} if g.room.teams else None})
     return reply(response)
 
 
@@ -262,6 +280,8 @@ def not_your_move():
         return refuse("You are watching this game", 403)
     if g.color != g.manager.game.current_player:
         return refuse("It is not your move", 403)
+    if g.seat != g.room.turn_seat():
+        return refuse("It is your teammate's move", 403)
     return None
 
 

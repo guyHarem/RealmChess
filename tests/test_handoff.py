@@ -55,6 +55,16 @@ class TestReplay(unittest.TestCase):
         self.assertEqual((copy.color_of(white), copy.color_of(black)), ("white", "black"))
         self.assertEqual(copy.offer, {"kind": "draw", "by": "black"})
 
+    def test_a_team_game_keeps_its_seats_and_turn(self):
+        room = self.old.create("online")
+        room.teams = True
+        keys = {seat: room.sit(seat) for seat in ("white", "black", "white2", "black2")}
+        play(room.manager, ((4, 1, 0), (4, 3, 0)), ((4, 6, 0), (4, 4, 0)))
+        copy = self.travel(room)
+        self.assertTrue(copy.teams)
+        self.assertEqual({seat: copy.seat_of(key) for seat, key in keys.items()}, {seat: seat for seat in keys})
+        self.assertEqual(copy.turn_seat(), "white2")
+
     def test_the_game_goes_on_and_can_be_taken_back(self):
         room = self.old.create("local")
         room.manager.new_game(rocks=False, clock={"initial": 60, "increment": 0})
@@ -133,7 +143,8 @@ class TestRealServers(unittest.TestCase):
             with urllib.request.urlopen(request, timeout=30) as answer:
                 return json.loads(answer.read())
         except urllib.error.HTTPError as e:
-            return json.loads(e.read())
+            with e:
+                return json.loads(e.read())
 
     def test_a_deploy_keeps_the_online_game(self):
         old_port, new_port = self.free_port(), self.free_port()

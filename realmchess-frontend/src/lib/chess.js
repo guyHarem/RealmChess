@@ -90,6 +90,8 @@ function originOf(entry, piece, takes) {
   return `${squareName(entry.from)}${layerOf(z)?.mark ?? ''}`
 }
 
+export const PORTAL_MARK = '⊙' // in move notation: the piece went through a portal
+
 // Move history → score-sheet rows: [{ number, white: move, black: move }]
 // A move is { text, mark, z, suffix }: standard chess notation, then the layer mark
 // (nothing on the Ground), then + or #.
@@ -114,7 +116,8 @@ export function scoreSheet(history) {
       text = entry.to[0] > entry.from[0] ? 'O-O' : 'O-O-O'
     } else {
       const takes = entry.captured_piece ? 'x' : ''
-      text = `${LETTERS[piece.type]}${originOf(entry, piece, takes)}${takes}${squareName(entry.to)}`
+      const through = entry.special_move === 'portal' ? PORTAL_MARK : ''
+      text = `${LETTERS[piece.type]}${originOf(entry, piece, takes)}${takes}${through}${squareName(entry.to)}`
     }
     const z = entry.to[2]
     moves.push({ color: piece.color, text, z, mark: layerOf(z)?.mark ?? '', suffix })
@@ -180,3 +183,27 @@ export const LESSON_MOVES = [
   [4, 3, 0], [4, 1, 0], [0, 3, 0], [0, 1, 0], [3, 4, 0], [3, 0, 0], [1, 4, 0], [1, 0, 0],
   [4, 2, 1], [0, 2, 1], [2, 4, 1], [2, 0, 1], [4, 2, -1], [0, 2, -1], [2, 4, -1], [2, 0, -1],
 ]
+
+// ---------- portals ----------
+// game.portals is a list of pairs of cells. A piece that ends its move on an empty portal
+// comes out of the other one.
+
+export const PORTAL_COLORS = ['#F472B6', '#FB923C'] // one colour per pair: pink, orange
+export const PORTAL_NAMES = ['A', 'B']
+
+// { "[x, y, z]": { twin, pair } } for every portal cell
+export function portalCells(portals) {
+  const cells = {}
+  ;(portals ?? []).forEach(([a, b], pair) => {
+    cells[keyOf(a)] = { twin: b, pair }
+    cells[keyOf(b)] = { twin: a, pair }
+  })
+  return cells
+}
+
+// The classic layout, for the setup page's picture (the server holds the real one)
+export const CLASSIC_PORTALS = [
+  [[0, 3, 2], [7, 4, -2]],
+  [[0, 4, 2], [7, 3, -2]],
+]
+

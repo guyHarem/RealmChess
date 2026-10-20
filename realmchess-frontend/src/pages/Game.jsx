@@ -9,7 +9,7 @@ import PlayerCard from '../components/PlayerCard.jsx'
 import TeamChat from '../components/TeamChat.jsx'
 import { FULL_BOARD, LAYERS, capturedBy, capturedPoints, describeMove, keyOf, layerOf, layersOf, otherColor, parsePiece } from '../lib/chess.js'
 import { navigate } from '../lib/router.js'
-import { clockRequest, computerRequest, levelName, loadSettings, saveSettings } from '../lib/settings.js'
+import { clockRequest, computerRequest, levelName, loadSettings, portalRequest, saveSettings } from '../lib/settings.js'
 import { playSound } from '../lib/sound.js'
 import { useGame } from '../lib/useGame.js'
 import { usePhone } from '../lib/usePhone.js'
@@ -69,7 +69,7 @@ const seatName = (seat) => `${NAMES[seat.slice(0, 5)]} ${seatNumber(seat)}`
 
 export default function Game({ id, joinSide = null }) {
   const {
-    game, selected, legalMoves, error, gone, clickCell, newGame, undo, promote, resign, agreeDraw, refresh, computerMove,
+    game, selected, legalMoves, portalEntries, error, gone, clickCell, newGame, undo, promote, resign, agreeDraw, refresh, computerMove,
     offer, answer, askHint, say, select, clearSelection,
   } = useGame(id, joinSide)
   const [settings, setSettings] = useState(loadSettings)
@@ -142,6 +142,9 @@ export default function Game({ id, joinSide = null }) {
       }
     : null
   const size = game?.board_size?.size ?? FULL_BOARD.size
+  const portals = game?.portals ?? []
+  // The selected piece's moves, and the portals it can step into, which lead to some of them
+  const shownMoves = portalEntries.length ? [...legalMoves, ...portalEntries] : legalMoves
   // What glides on the 3D board: the move just played (with the rook when castling), or after
   // a take-back the pieces going back to where they were
   const [glideState, setGlideState] = useState({ length: 0, last: null, glides: null })
@@ -276,6 +279,7 @@ export default function Game({ id, joinSide = null }) {
       rocks: settings.rocks,
       move_limit: settings.moveLimit,
       clock: clockRequest(settings.clock),
+      portals: portalRequest(settings),
       computer: computerRequest(settings),
     })
   }
@@ -495,7 +499,8 @@ export default function Game({ id, joinSide = null }) {
         layers={layers}
         activeLayer={shownLayer}
         selected={selected}
-        legalMoves={legalMoves}
+        legalMoves={shownMoves}
+        portals={portals}
         lastMove={lastMove}
         glides={glides}
         check={check}
@@ -731,7 +736,8 @@ export default function Game({ id, joinSide = null }) {
         z={shownLayer}
         side={side}
         selected={selected}
-        legalMoves={legalMoves}
+        legalMoves={shownMoves}
+        portals={portals}
         lastMove={lastMove}
         suggestion={suggestion}
         showMoves={settings.showLegalMoves}
@@ -748,7 +754,7 @@ export default function Game({ id, joinSide = null }) {
       onSay={(text) => say(text)}
     />
   )
-  const moveList = <MoveList history={history} currentPlayer={player} finished={!!outcome} />
+  const moveList = <MoveList history={history} currentPlayer={player} finished={!!outcome} portals={portals.length > 0} />
 
   if (phone) {
     // One screen, no scrolling: the 3D board for the overview, the top view for tapping,

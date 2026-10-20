@@ -5,7 +5,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
-import { boardItems, isDarkSquare, keyOf, layerOf, sameCoord } from '../lib/chess.js'
+import { PORTAL_COLORS, boardItems, isDarkSquare, keyOf, layerOf, sameCoord } from '../lib/chess.js'
 import { createMoveBall, createPiece, createRock } from '../pieces3d.js'
 
 const FLAT = [-Math.PI / 2, 0, 0]
@@ -224,6 +224,28 @@ function Ghost({ type, color, position }) {
   return <primitive object={object} position={position} raycast={() => null} />
 }
 
+const NO_HITS = () => null // decorations never take a click: it goes to the cell or piece
+
+// A portal: an upright ring in its pair's colour, turning slowly over a glowing pad
+function Portal({ position, color }) {
+  const ring = useRef(null)
+  useFrame((_, delta) => {
+    if (ring.current) ring.current.rotation.y += delta * 1.2
+  })
+  return (
+    <group position={position}>
+      <mesh position={[0, 0.02, 0]} rotation={FLAT} raycast={NO_HITS}>
+        <circleGeometry args={[0.42, 48]} />
+        <meshBasicMaterial color={color} transparent opacity={0.28} depthWrite={false} toneMapped={false} />
+      </mesh>
+      <mesh ref={ring} position={[0, 0.5, 0]} raycast={NO_HITS}>
+        <torusGeometry args={[0.34, 0.045, 12, 48]} />
+        <meshBasicMaterial color={color} transparent opacity={0.85} toneMapped={false} />
+      </mesh>
+    </group>
+  )
+}
+
 // Under a king in check: a red disc that pulses, so a check from another layer is seen at once
 function CheckPulse({ position }) {
   const disc = useRef(null)
@@ -393,6 +415,7 @@ function Scene({
   goal,
   lastMove,
   glides,
+  portals,
   check,
   suggestion,
   showMoveBalls,
@@ -486,6 +509,11 @@ function Scene({
         />
       )}
       {check && visible(check[2]) && <CheckPulse position={cellPosition(check)} />}
+      {portals.flatMap((pair, index) =>
+        pair.filter((cell) => visible(cell[2])).map((cell) => (
+          <Portal key={keyOf(cell)} position={cellPosition(cell)} color={PORTAL_COLORS[index % PORTAL_COLORS.length]} />
+        )),
+      )}
       {lastMove && visible(lastMove.from[2]) && <MovePad position={cellPosition(lastMove.from)} />}
       {lastMove && visible(lastMove.to[2]) && <MovePad position={cellPosition(lastMove.to)} arrived />}
       {goal && visible(goal[2]) && <GoalPad position={cellPosition(goal)} />}
@@ -521,6 +549,7 @@ export default function CubeBoard({
   goal = null,
   lastMove = null, // { from, to, index (in the move history), captured: { type, color } or null }
   glides = null, // [{ from, to }]: pieces that have just arrived and where they came from (default: lastMove)
+  portals = [], // pairs of linked cells
   check = null, // the cell of a king in check
   suggestion = null, // { from, to }: a move suggested by a hint or a teammate
   showMoveBalls = true,
@@ -548,6 +577,7 @@ export default function CubeBoard({
         goal={goal}
         lastMove={lastMove}
         glides={glides}
+        portals={portals}
         check={check}
         suggestion={suggestion}
         showMoveBalls={showMoveBalls}

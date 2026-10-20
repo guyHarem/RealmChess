@@ -7,6 +7,7 @@ export const DEFAULT_SETTINGS = {
   level: 'medium', // the computer's level
   side: 'white', // which colour sits nearest the camera; against the computer, the side you play
   rocks: true,
+  portals: 'off', // 'off', 'classic' (the designed layout) or 'shuffle' (random, mirrored)
   showLegalMoves: true,
   allowUndo: true,
   sound: true,
@@ -38,6 +39,15 @@ export function computerRequest(settings, side = settings.side) {
   if (!playsComputer(settings)) return null
   return { color: side === 'white' ? 'black' : 'white', level: settings.level }
 }
+
+export const PORTAL_CHOICES = [
+  { id: 'off', label: 'Off' },
+  { id: 'classic', label: 'Classic' },
+  { id: 'shuffle', label: 'Shuffle' },
+]
+
+// The portal part of a "new game" request
+export const portalRequest = (settings) => (settings.portals === 'off' ? undefined : settings.portals)
 
 // The clock part of a "new game" request: null for no clock, else seconds
 export function clockRequest(clock) {

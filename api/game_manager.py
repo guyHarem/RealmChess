@@ -238,6 +238,7 @@ class GameManager:
 
             # Only the player to move has legal moves, none while a promotion is pending,
             # and none once the game is over
+            entries = set()
             if (piece is None or isinstance(piece, Rock) or
                     piece.color != self.game.current_player or
                     self.game.pending_promotion is not None or
@@ -245,10 +246,14 @@ class GameManager:
                 moves = []
             else:
                 moves = self.game.get_legal_moves(from_coord)
+                if self.game.board.portals:
+                    self.game._legal_routes(from_coord, entries)
 
             return {
                 "success": True,
                 "legal_moves": moves,
+                # The portals the piece can step into (each leads to a cell in legal_moves)
+                "portal_entries": [list(cell) for cell in sorted(entries)],
                 "current_player": self.game.current_player
             }
         except ValueError as e:

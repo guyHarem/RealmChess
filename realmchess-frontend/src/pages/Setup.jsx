@@ -2,10 +2,12 @@ import { useState } from 'react'
 import CubeBoard from '../components/CubeBoard.jsx'
 import Logo from '../components/Logo.jsx'
 import { OFFLINE, openGame } from '../lib/api.js'
-import { START_BOARD } from '../lib/chess.js'
+import { CLASSIC_PORTALS, START_BOARD } from '../lib/chess.js'
 import { navigate } from '../lib/router.js'
 import { usePhone } from '../lib/usePhone.js'
-import { CLOCK_PRESETS, LEVELS, clockRequest, computerRequest, levelName, loadSettings, playsComputer, saveSettings } from '../lib/settings.js'
+import {
+  CLOCK_PRESETS, LEVELS, PORTAL_CHOICES, clockRequest, computerRequest, levelName, loadSettings, playsComputer, portalRequest, saveSettings,
+} from '../lib/settings.js'
 
 function Choice({ selected, disabled, onClick, title, hint, children }) {
   return (
@@ -58,6 +60,7 @@ export default function Setup() {
         : `${CLOCK_PRESETS.find((option) => option.mode === clock.mode).label} each.`
   const rulesSummary = [
     settings.rocks ? 'Rocks on' : 'Rocks off',
+    settings.portals === 'off' ? 'no portals' : `${settings.portals} portals`,
     settings.showLegalMoves ? 'legal moves shown' : 'legal moves hidden',
     settings.allowUndo ? 'undo allowed' : 'no undo',
     `draw after ${settings.moveLimit} quiet moves`,
@@ -84,6 +87,7 @@ export default function Setup() {
         move_limit: limit,
         clock: clockRequest(clock),
         computer: computerRequest(settings, side) ?? undefined,
+        portals: portalRequest(settings),
       })
       if (!data.success) throw new Error(data.error)
       saveSettings({ ...settings, side, moveLimit: limit })
@@ -245,6 +249,16 @@ export default function Setup() {
                 <legend>Rules and help</legend>
                 <div className="switches">
                   <Switch label="Rocks in the dungeon" checked={settings.rocks} onChange={(rocks) => set({ rocks })} />
+                  <div className="field">
+                    <label htmlFor="portals">Portals</label>
+                    <select id="portals" value={settings.portals} onChange={(event) => set({ portals: event.target.value })}>
+                      {PORTAL_CHOICES.map((choice) => (
+                        <option key={choice.id} value={choice.id}>
+                          {choice.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                   <Switch
                     label="Show legal moves"
                     checked={settings.showLegalMoves}
@@ -277,6 +291,16 @@ export default function Setup() {
               <legend>Rules and help</legend>
               <div className="switches">
                 <Switch label="Rocks in the dungeon" checked={settings.rocks} onChange={(rocks) => set({ rocks })} />
+                <div className="field">
+                  <label htmlFor="portals">Portals</label>
+                  <select id="portals" value={settings.portals} onChange={(event) => set({ portals: event.target.value })}>
+                    {PORTAL_CHOICES.map((choice) => (
+                      <option key={choice.id} value={choice.id}>
+                        {choice.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <Switch
                   label="Show legal moves"
                   checked={settings.showLegalMoves}
@@ -319,7 +343,12 @@ export default function Setup() {
 
         <aside className="setup-preview">
           <div className="setup-picture">
-            <CubeBoard interactive={false} board={previewBoard} side={previewSide} />
+            <CubeBoard
+              interactive={false}
+              board={previewBoard}
+              side={previewSide}
+              portals={settings.portals === 'classic' ? CLASSIC_PORTALS : []}
+            />
           </div>
           <p className="setup-summary">
             <strong>
@@ -365,7 +394,9 @@ export default function Setup() {
                 ? 'A coin flip decides which side sits nearest.'
                 : `${previewSide === 'white' ? 'White' : 'Black'} sits nearest. White moves first.`}
             <br />
-            {clockSummary} {settings.rocks ? 'Rocks on.' : 'Rocks off.'} {settings.allowUndo ? 'Undo allowed.' : 'No undo.'}
+            {clockSummary} {settings.rocks ? 'Rocks on.' : 'Rocks off.'}{' '}
+            {{ off: '', classic: 'Portals: two linked pairs, Space to the Abyss.', shuffle: 'Portals in random places, the same for both sides.' }[settings.portals]}{' '}
+            {settings.allowUndo ? 'Undo allowed.' : 'No undo.'}
           </p>
         </aside>
       </main>

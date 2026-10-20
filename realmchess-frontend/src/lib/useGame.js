@@ -1,7 +1,7 @@
 // Game state from the backend plus the local selection (which piece is picked up)
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { OFFLINE, api, legalMovesOf, rememberSeat } from './api.js'
-import { keyOf, parsePiece, sameCoord } from './chess.js'
+import { keyOf, parsePiece, portalCells, sameCoord } from './chess.js'
 
 const POLL_MS = 1000 // how often an online game asks whether the other player has done something
 
@@ -11,6 +11,7 @@ export function useGame(which = 'main', joinSide = null) {
   const [game, setGame] = useState(null)
   const [selected, setSelected] = useState(null)
   const [legalMoves, setLegalMoves] = useState([])
+  const [portalEntries, setPortalEntries] = useState([]) // portals the selected piece can step into
   const [error, setError] = useState(null)
   const [gone, setGone] = useState(false) // the server no longer has this game
   const latest = useRef(null)
@@ -18,6 +19,7 @@ export function useGame(which = 'main', joinSide = null) {
   const clearSelection = useCallback(() => {
     setSelected(null)
     setLegalMoves([])
+    setPortalEntries([])
   }, [])
 
   // Take in an answer that carries the whole game. Answers can arrive out of order (a slow
@@ -42,6 +44,7 @@ export function useGame(which = 'main', joinSide = null) {
       setError(data.success || data.draw_declined ? null : data.error)
       setSelected(null)
       setLegalMoves([])
+      setPortalEntries([])
       return data
     } catch {
       setError(OFFLINE)
@@ -71,6 +74,7 @@ export function useGame(which = 'main', joinSide = null) {
           accept(data)
           setSelected(null)
           setLegalMoves([])
+          setPortalEntries([])
         }
         setError(null)
       } catch {
@@ -143,6 +147,7 @@ export function useGame(which = 'main', joinSide = null) {
       const data = await legalMovesOf(coord, which)
       setSelected(coord)
       setLegalMoves(data.legal_moves ?? [])
+      setPortalEntries(data.portal_entries ?? [])
     } catch {
       setError(OFFLINE)
     }
@@ -156,17 +161,25 @@ export function useGame(which = 'main', joinSide = null) {
         call('/game/move', { from: selected, to: coord })
         return
       }
+      // Stepping into a portal: the move is to where it comes out
+      if (selected && portalEntries.some((entry) => sameCoord(entry, coord))) {
+        call('/game/move', { from: selected, to: portalCells(game.portals)[keyOf(coord)].twin })
+        return
+      }
       const piece = parsePiece(game.board[keyOf(coord)])
       if (piece?.color === game.current_player && !sameCoord(selected, coord)) select(coord)
       else clearSelection()
     },
-    [game, selected, legalMoves, call, select, clearSelection],
+    [game, selected, legalMoves, portalEntries, call, select, clearSelection],
   )
 
   return {
     game,
     selected,
+    // Where the selected piece may move: the cells it lands on, and the portals it can step
+    // into (shown as moves too; clicking one plays the move to the other end)
     legalMoves,
+    portalEntries,
     error,
     gone,
     clickCell,

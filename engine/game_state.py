@@ -400,9 +400,10 @@ class GameState:
         twin = self.board.portals.get(coord)
         return [twin] if twin is not None and self.board.get_piece(twin) is None else []
 
-    def _legal_routes(self, from_coord):
+    def _legal_routes(self, from_coord, entries=None):
         """Every ordinary legal move of the piece (not castling or en passant): {landing: the
-        portal it goes through, or None when it can get there without one}"""
+        portal it goes through, or None when it can get there without one}. entries, a set,
+        collects every portal the piece can legally step into."""
         routes = {}
         piece = self.board.get_piece(from_coord)
         if piece is None or isinstance(piece, Rock):
@@ -420,9 +421,10 @@ class GameState:
                 return
             if (needs == 'empty' and occupant is not None) or (needs == 'enemy' and occupant is None):
                 return
-            if landing in routes and routes[landing] is None:
-                return
-            if self.simulate_move(piece, from_coord, landing):
+            # Landing where an earlier move already landed ends in the same position: as legal
+            if landing in routes or self.simulate_move(piece, from_coord, landing):
+                if via is not None and entries is not None:
+                    entries.add(via)
                 if landing not in routes or via is None:
                     routes[landing] = via
 

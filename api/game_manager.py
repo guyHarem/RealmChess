@@ -194,7 +194,13 @@ class GameManager:
         if portals == "classic":
             return CLASSIC_PORTALS
         if portals == "shuffle":
-            return shuffled_portals(random.Random(), board)
+            # Throw away layouts where a first move can already go through a portal: the
+            # computer then opens with that trip every time
+            rng = random.Random()
+            while True:
+                pairs = shuffled_portals(rng, board)
+                if not GameManager._first_move_trips(board, pairs):
+                    return pairs
         if (not isinstance(portals, list) or not 1 <= len(portals) <= 4 or
                 not all(isinstance(pair, list) and len(pair) == 2 for pair in portals)):
             raise ValueError('portals must be "classic", "shuffle" or a list of up to 4 pairs of cells')
@@ -209,6 +215,19 @@ class GameManager:
                 cells.append(tuple(cell))
             pairs.append(cells)
         return pairs
+
+    @staticmethod
+    def _first_move_trips(board, pairs):
+        """Could either side go through one of these portals on its first move?"""
+        for player in ("white", "black"):
+            game = GameState()
+            game.board.board = dict(board.board)
+            game.board.set_portals(pairs)
+            game.current_player = player
+            for coord, _ in game.get_all_pieces_of_color(player):
+                if any(game._legal_routes(coord).values()):
+                    return True
+        return False
 
     def _replace_game(self, game, clock=None, computer=None):
         self.options = None   # new_game() fills it in; any other new position cannot be replayed

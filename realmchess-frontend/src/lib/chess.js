@@ -203,7 +203,7 @@ export function portalCells(portals) {
 
 // The classic layout, for the setup page's picture (the server holds the real one)
 export const CLASSIC_PORTALS = [
-  [[0, 3, 2], [7, 4, -2]],
-  [[0, 4, 2], [7, 3, -2]],
+  [[0, 2, 2], [7, 5, -2]],
+  [[0, 5, 2], [7, 2, -2]],
 ]
 

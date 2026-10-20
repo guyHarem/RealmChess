@@ -72,9 +72,9 @@ Abyss (on b and g, the files clear of the Abyss rocks): 24 pieces a side.
 sideways together with one layer up or down it cannot step, but it can capture there, so a
 queen or bishop cannot check it from the next cell without risk.
 
-**Portals (optional):** pairs of linked cells, switched on at setup: **Classic** (Space a4 with
-Abyss h5, and its mirror Space a5 with Abyss h4) or **Shuffle** (two random pairs off the Ground
-in the middle ranks, mirrored for the two sides). A piece that ends its move on an empty portal
+**Portals (optional):** pairs of linked cells, switched on at setup: **Classic** (Space a3 with
+Abyss h6, and its mirror Space a6 with Abyss h3; nothing reaches them on the first move) or **Shuffle** (two random pairs off the Ground
+in the middle ranks, mirrored for the two sides, never reachable on the first move). A piece that ends its move on an empty portal
 comes out on the other cell of its pair, capturing an enemy there; it may not land on its own
 piece. A piece standing on a portal plugs it: moving there just captures it. Sliding pieces and
 double steps cannot pass over an empty portal. Attacks go through portals the same way, so a

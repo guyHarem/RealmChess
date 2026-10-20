@@ -6,7 +6,9 @@ Provides HTTP endpoints for game management.
 import json
 import mimetypes
 import os
+import secrets
 import sys
+import time
 
 # Make the project root importable so `python api/app.py` works from any directory
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -17,7 +19,8 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from api import handoff
 from api.handoff import Arrival, key as handoff_key, key_matches
 from api.limits import Limiter, Slots
-from api.rooms import Rooms
+from api.rooms import PHRASES, Rooms
+from api.stats import EVENTS, PAGES, Inbox, Stats, game_ended, game_forgotten, game_started
 from api.utils import convert_response
 from engine.pieces import Queen, Rook, Bishop, Knight
 
@@ -52,6 +55,8 @@ limits = {
     "new_games": Limiter(20, 60),
     "computer_moves": Limiter(40, 60),
     "thinking": Slots(2),              # computer moves being thought about at the same time
+    "feedback": Limiter(5, 600),
+    "visits": Limiter(60, 60),
 }
 
 
@@ -78,6 +83,18 @@ practice_manager = rooms.get("practice").manager
 # Games handed over by the previous server on a deploy (api/handoff.py)
 arrival = Arrival()
 
+# Anonymous play counts and the players' feedback (api/stats.py), handed over with the games
+stats = Stats()
+stats.set_salt(handoff_key())
+inbox = Inbox()
+handoff.keep("stats", stats.snapshot, stats.take)
+handoff.keep("feedback", inbox.snapshot, inbox.take)
+rooms.forgotten = lambda room: game_forgotten(stats, room)
+STARTED = time.time()
+
+# Requests that are not about one game
+NO_GAME = ('/api/games', '/api/health', '/api/lobby', '/api/visit', '/api/feedback')
+
 
 @app.before_request
 def choose_game():
@@ -87,7 +104,7 @@ def choose_game():
         return None   # the previous server, which has its own key
     if hosted() and not limits["requests"].allow(visitor()):
         return too_many()
-    if request.path in ('/api/games', '/api/health'):
+    if request.path in NO_GAME or request.path.startswith('/api/admin'):
         return None
     room_id = request.args.get("game", "main")
     room = rooms.get(room_id)
@@ -109,6 +126,8 @@ def reply(response, **extra):
     """Send a game-manager answer to the page, with the room's details added"""
     room = g.room
     status_code = 200 if response.get("success") else 400
+    if "board" in response:
+        game_ended(stats, room, response)
     response = convert_response(response)
     response.update(extra)
     if "board" in response:
@@ -160,6 +179,7 @@ def open_game():
     creator plays ("white" by default); the answer then carries the creator's secret "seat" key.
     "teams": true makes it a team game: two players a side taking turns with the army (on one
     screen, against the computer, or online, where a team may also play the computer).
+    "public": true (online only) lists the game in the lobby, for anyone to join.
     The answer's "game_id" is the room: pass it as ?game=<game_id> from then on."""
     if hosted() and not limits["new_games"].allow(visitor()):
         return too_many()
@@ -174,6 +194,8 @@ def open_game():
         return refuse("Only a computer game, or a team playing the computer online, takes a computer")
     if kind == "practice" and data.get("teams"):
         return refuse("Practice boards have no teams")
+    if data.get("public") and kind != "online":
+        return refuse("Only online games are open to anyone")
     if kind == "online" and data.get("computer") is not None and data["computer"].get("color") == side:
         return refuse("The computer plays the other side")
     try:
@@ -181,10 +203,15 @@ def open_game():
     except ValueError as e:
         return refuse(str(e))
     room.teams = bool(data.get("teams"))
+    room.public = bool(data.get("public"))
     g.room, g.manager, g.seat, g.color = room, room.manager, None, None
     response = start(room.manager, data)
     if not response.get("success"):
+        rooms.remove(room.id)
         return reply(response)
+    if kind != "practice":
+        stats.visitor(visitor())
+        game_started(stats, room, data)
     if kind == "online":
         seat = room.sit(side)
         g.seat, g.color = side, side
@@ -197,7 +224,15 @@ def new_game():
     """Start a new game in the same room. Optional body:
     {"rocks": true, "move_limit": 50, "clock": {"initial": 600, "increment": 5},
      "computer": {"color": "black", "level": "hard"}} (clock in seconds; omit clock or computer for none)"""
-    return not_online() or reply(start(g.manager, request.get_json(silent=True) or {}))
+    refusal = not_online()
+    if refusal:
+        return refusal
+    data = request.get_json(silent=True) or {}
+    response = start(g.manager, data)
+    if response.get("success") and g.room.kind != "practice":
+        g.room.ended = False
+        game_started(stats, g.room, data)
+    return reply(response)
 
 
 @app.route('/api/game/join', methods=['POST'])
@@ -210,8 +245,11 @@ def join_game():
     side = (request.get_json(silent=True) or {}).get("side")
     if side not in (None, "white", "black"):
         return refuse('side must be "white" or "black"')
+    before = g.seat
     seat, g.seat = g.room.join(request.headers.get("X-Seat"), side)
     g.color = g.seat[:5] if g.seat else None
+    if g.seat and before is None:
+        stats.count("lobby.joined" if g.room.public else "online.joined")
     g.room.seen(g.seat)
     return reply(g.manager.get_state(), seat=seat)
 
@@ -306,10 +344,12 @@ def computer_move():
 
 @app.route('/api/game/say', methods=['POST'])
 def say():
-    """Online team games: {"text": "...", "move": {"from": [x,y,z], "to": [x,y,z]} (optional)}
-    to your teammate. A move is a suggestion for the position now; it is not played."""
+    """Online games: {"text": "...", "to": "team" | "all", "move": {"from": [x,y,z], "to": [x,y,z]}
+    (optional, to your teammate only)}. "to": "team" (the default) reaches your teammate in a
+    team game, "all" everyone playing. A move is a suggestion for the position now; it is not
+    played. In an open game the text must be one of the phrases in "phrases"."""
     if not online():
-        return refuse("Only online team games have team messages")
+        return refuse("Only online games have messages")
     data = request.get_json(silent=True) or {}
     move = data.get("move")
     try:
@@ -317,10 +357,18 @@ def say():
             if not isinstance(move, dict):
                 raise ValueError('move must be {"from": [x, y, z], "to": [x, y, z]}')
             move = {"from": parse_coord(move.get("from")), "to": parse_coord(move.get("to"))}
-        g.room.say(g.seat, data.get("text", ""), move)
+        g.room.say(g.seat, data.get("text", ""), move, data.get("to", "team"))
     except ValueError as e:
         return refuse(str(e))
+    stats.count("chat." + ("team" if data.get("to", "team") == "team" else "all"))
     return reply(g.manager.get_state())
+
+
+@app.route('/api/game/claim', methods=['POST'])
+def claim():
+    """Online games: win because the other side has left (gone for a minute or more, which the
+    game's "online" details show as "claimable")"""
+    return offer_reply(lambda: g.room.claim(g.seat))
 
 
 @app.route('/api/game/hint', methods=['POST'])
@@ -333,6 +381,7 @@ def hint():
         return refuse("You are watching this game", 403)
     if g.room.kind == "practice":
         return refuse("The lessons and puzzles have their own help")
+    stats.count("hints")
     if not hosted():
         return reply(g.manager.hint())
     who = visitor()
@@ -475,14 +524,105 @@ def handoff_games():
     if not key_matches(request.headers.get("X-Handoff-Key")):
         return refuse("No such endpoint", 404)
     if request.method == "GET":
-        return jsonify({"success": True, "server": handoff.SERVER, "rooms": handoff.snapshots(rooms, app.logger.warning)})
+        return jsonify({"success": True, "server": handoff.SERVER, "rooms": handoff.snapshots(rooms, app.logger.warning),
+                        **handoff.extras()})
     if request.headers.get("X-Handoff-From") == handoff.SERVER:
         return jsonify({"success": True, "server": handoff.SERVER, "self": True, "restored": 0})
+    request.max_content_length = handoff.EXTRA_BYTES   # the counts and feedback come along
     data = request.get_json(silent=True)
     if not isinstance(data, dict) or not isinstance(data.get("rooms"), list):
         return refuse("Expected {\"rooms\": [...]}")
     restored = arrival.take(rooms, data, how="pushed", log=app.logger.warning)
     return jsonify({"success": True, "server": handoff.SERVER, "restored": restored})
+
+
+# ==================== THE LOBBY ====================
+
+@app.route('/api/lobby')
+def lobby():
+    """Open games waiting for players, oldest first, and how many online games are being played.
+    "phrases": what players in an open game can say to each other."""
+    games = rooms.open_games()
+    return jsonify({"success": True, "games": [room.listing() for room in games[:50]],
+                    "playing": rooms.live()["online_playing"], "phrases": list(PHRASES)})
+
+
+# ==================== COUNTS AND FEEDBACK ====================
+
+@app.route('/api/visit', methods=['POST'])
+def visit():
+    """A page tells the server it was opened ({"page": "home"}), or that something happened
+    ({"event": "lesson_done"}). Counted per day, with no address kept (api/stats.py)."""
+    if hosted() and not limits["visits"].allow(visitor()):
+        return too_many()
+    data = request.get_json(silent=True, force=True) or {}
+    page, event = data.get("page"), data.get("event")
+    if page in PAGES:
+        stats.visitor(visitor())
+        stats.count(f"page.{page}")
+    elif event in EVENTS:
+        stats.count(f"event.{event}")
+    else:
+        return refuse("Unknown page or event")
+    return jsonify({"success": True})
+
+
+@app.route('/api/feedback', methods=['POST'])
+def feedback():
+    """What a player sends with the Feedback button: {"kind": "bug" | "idea" | "other",
+    "text", "contact" (optional), "page", "game" (optional)}"""
+    if hosted() and not limits["feedback"].allow(visitor()):
+        return too_many()
+    data = request.get_json(silent=True) or {}
+    try:
+        item = inbox.add(data.get("kind"), data.get("text"), data.get("contact"), data.get("page"),
+                         data.get("game"), request.headers.get("User-Agent", ""))
+    except ValueError as e:
+        return refuse(str(e))
+    stats.count("feedback")
+    # Also in the server log, which outlives a crash
+    app.logger.warning("feedback: %s", json.dumps(item))
+    return jsonify({"success": True})
+
+
+# ==================== ADMIN ====================
+
+def admin_allowed():
+    """The admin page needs REALMCHESS_ADMIN_KEY. On a developer's machine without one it is open."""
+    key = os.environ.get("REALMCHESS_ADMIN_KEY")
+    if not key:
+        return not hosted()
+    sent = request.headers.get("X-Admin-Key", "")
+    return bool(sent) and secrets.compare_digest(sent, key)
+
+
+@app.route('/api/admin')
+def admin():
+    """Everything the admin page shows: what is going on now, the counts per day, the feedback"""
+    if not admin_allowed():
+        return refuse("Wrong admin key", 403)
+    return jsonify({
+        "success": True,
+        "live": rooms.live(),
+        "days": stats.days(),
+        "feedback": inbox.items(),
+        "server": {"started": round(STARTED), "now": round(time.time()),
+                   "commit": os.environ.get("RENDER_GIT_COMMIT", "")[:7] or None,
+                   "handoff": handoff_key() is not None, "taken_over": dict(arrival.counts)},
+    })
+
+
+@app.route('/api/admin/feedback', methods=['POST'])
+def admin_feedback():
+    """Mark a feedback message handled or not: {"id", "done": true | false}"""
+    if not admin_allowed():
+        return refuse("Wrong admin key", 403)
+    data = request.get_json(silent=True) or {}
+    try:
+        inbox.mark(data.get("id"), data.get("done", True))
+    except ValueError as e:
+        return refuse(str(e))
+    return jsonify({"success": True, "feedback": inbox.items()})
 
 
 # ==================== THE PAGES ====================
@@ -497,7 +637,7 @@ def health():
         # "handoff": whether this server has the key to take over games on a deploy (not the
         # key), and how many games it took over from the previous server
         return jsonify({"success": True, "visitor": visitor(), "handoff": handoff_key() is not None,
-                        "taken_over": dict(arrival.counts)})
+                        "admin": bool(os.environ.get("REALMCHESS_ADMIN_KEY")), "taken_over": dict(arrival.counts)})
     return jsonify({"success": True})
 
 

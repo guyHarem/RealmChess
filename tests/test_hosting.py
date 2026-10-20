@@ -97,7 +97,7 @@ class TestLockedDown(HostedTestCase):
         # ... and whether it can take over games on a deploy
         with unittest.mock.patch.dict(os.environ, {"REALMCHESS_HANDOFF_KEY": ""}):
             self.assertEqual(self.client.get('/api/health').get_json(),
-                             {"success": True, "visitor": "127.0.0.1", "handoff": False,
+                             {"success": True, "visitor": "127.0.0.1", "handoff": False, "admin": False,
                               "taken_over": {"pulled": 0, "pushed": 0}})
         with unittest.mock.patch.dict(os.environ, {"REALMCHESS_HANDOFF_KEY": "secret"}):
             self.assertTrue(self.client.get('/api/health').get_json()["handoff"])

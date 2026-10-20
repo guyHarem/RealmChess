@@ -158,6 +158,15 @@ class TestDynamiteGames(unittest.TestCase):
         undone = self.client.post(f'/api/game/undo?game={game}', json={}).get_json()
         self.assertEqual((undone["dynamite"], undone["board"]["[4, 1, 0]"]), ([[4, 3, 0]], "Pawn(white)"))
 
+    def test_shuffled_dynamite_cannot_go_off_on_the_first_move(self):
+        from api.game_manager import GameManager
+        for _ in range(15):
+            data = self.open(dynamite="shuffle", portals="shuffle", clouds="shuffle")
+            board = GameManager()
+            board.new_game(portals=data["portals"], clouds=data["clouds"])
+            cells = [tuple(cell) for cell in data["dynamite"]]
+            self.assertFalse(GameManager._first_move_blasts(board.game.board, cells), cells)
+
     def test_bad_dynamite_is_refused(self):
         self.assertFalse(self.open(dynamite="everywhere")["success"])
         self.assertFalse(self.open(dynamite=[[4, 1, 0]])["success"])   # a pawn stands there

@@ -11,6 +11,9 @@ Both ends hand over, through the service's public address:
     tries again.
 It costs nothing, but it only covers a planned replacement: a crash still loses the games.
 
+Other things kept in memory (the play counts and the feedback, api/stats.py) travel along:
+see keep().
+
 A game travels as its starting options and its moves, and the new server replays them, so
 nothing but plain JSON crosses over and every move is checked by the rules again. Positions
 edited by hand (the lesson and puzzle boards) do not travel; their pages start them afresh.
@@ -30,7 +33,8 @@ import urllib.request
 
 from engine import pieces
 
-BATCH_BYTES = 48 * 1024   # the server refuses requests over 64 KB
+BATCH_BYTES = 48 * 1024   # the server refuses requests over 64 KB (the handoff takes more, see EXTRA_BYTES)
+EXTRA_BYTES = 8 * 1024 * 1024   # what a handoff request may carry: the games and keep()'s data
 PROMOTIONS = ("Queen", "Rook", "Bishop", "Knight")
 WAIT_SECONDS = 60         # after starting, how long the new server waits for the old one's games
 
@@ -75,6 +79,8 @@ def snapshot(room):
             "kind": room.kind,
             "seats": dict(room.seats),
             "teams": room.teams,
+            "public": room.public,
+            "ended": room.ended,
             "chat": [dict(message, move=None if message["move"] is None else
                           dict(message["move"], **{"from": list(message["move"]["from"]), "to": list(message["move"]["to"])}))
                      for message in room.chat],
@@ -120,6 +126,8 @@ def restore(rooms, data):
             manager._version = data["version"] + 1   # pages drop answers older than what they show
             room.seats = dict(data["seats"])
             room.teams = bool(data.get("teams"))
+            room.public = bool(data.get("public"))
+            room.ended = bool(data.get("ended"))
             room.chat = [dict(message, move=None if message.get("move") is None else
                               dict(message["move"], **{"from": tuple(message["move"]["from"]),
                                                        "to": tuple(message["move"]["to"])}),
@@ -139,6 +147,17 @@ def restore(rooms, data):
 # ==================== BETWEEN THE TWO SERVERS ====================
 
 SERVER = secrets.token_hex(8)   # this server process, so a server can tell it has reached itself
+EXTRAS = {}                     # name -> (snapshot(), take(data)): handed over besides the games
+
+
+def keep(name, snapshot_fn, take_fn):
+    """Hand this over on a deploy too: snapshot_fn() gives plain JSON, and on the new server
+    take_fn(data) takes it in (raising ValueError when it cannot)"""
+    EXTRAS[name] = (snapshot_fn, take_fn)
+
+
+def extras():
+    return {name: snapshot_fn() for name, (snapshot_fn, _) in EXTRAS.items()}
 
 
 def snapshots(rooms, log=print):
@@ -178,7 +197,8 @@ def pull(rooms, arrival, url=None, log=print):
         return 0
     if answer.get("server") == SERVER:
         return 0
-    taken = arrival.take(rooms, {"rooms": answer.get("rooms", [])}, how="pulled", log=log)
+    taken = arrival.take(rooms, {**{name: answer[name] for name in EXTRAS if name in answer},
+                                 "rooms": answer.get("rooms", [])}, how="pulled", log=log)
     log(f"handoff: {taken} game(s) taken over from the previous server")
     return taken
 
@@ -207,7 +227,10 @@ def send(rooms, url=None, log=print, give_up_after=None, pause=1.0):
     for index, batch in enumerate(batches):
         while True:
             try:
-                answer = _call(url, {"rooms": batch, "done": index == len(batches) - 1})
+                body = {"rooms": batch, "done": index == len(batches) - 1}
+                if index == 0:
+                    body.update(extras())
+                answer = _call(url, body)
                 if not answer.get("self"):
                     sent += answer.get("restored", 0)
                     break
@@ -245,6 +268,12 @@ class Arrival:
     def take(self, rooms, data, how="pushed", log=print):
         """Take over games. A game already here is replaced only by a newer copy of one taken
         over earlier and not played on here since (moves made here are the latest)."""
+        for name, (_, take_fn) in EXTRAS.items():
+            if name in data:
+                try:
+                    take_fn(data[name])
+                except (ValueError, KeyError, TypeError, AttributeError) as e:
+                    log(f"handoff: {name} not taken over: {e}")
         restored = 0
         for game in data.get("rooms", []):
             room_id = game.get("id")

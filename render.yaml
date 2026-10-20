@@ -44,3 +44,7 @@ services:
       # Render makes one up once; it is sent to RENDER_EXTERNAL_URL, which Render sets.
       - key: REALMCHESS_HANDOFF_KEY
         generateValue: true
+      # The key for the admin page (realmchess.com/#/admin): play counts and feedback. Render
+      # makes one up once; copy it from the service's Environment page in the dashboard.
+      - key: REALMCHESS_ADMIN_KEY
+        generateValue: true

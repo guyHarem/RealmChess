@@ -60,7 +60,7 @@ class GameManager:
     def _get_status(self, draw_reason):
         player = self.game.current_player
         if self.result is not None:
-            return self.result["kind"]  # "resigned", "agreed_draw" or "timeout"
+            return self.result["kind"]  # "resigned", "abandoned", "agreed_draw" or "timeout"
         elif self.game.is_checkmate(player):
             return "checkmate"
         elif draw_reason == "stalemate":
@@ -250,6 +250,13 @@ class GameManager:
 
     @staticmethod
     def _dynamite_layout(dynamite, board):
+        if dynamite == "shuffle":
+            # As with portals: no charge a first move can reach, or the game can open with a blast
+            rng = random.Random()
+            while True:
+                cells = shuffled_dynamite(rng, board)
+                if not GameManager._first_move_blasts(board, cells):
+                    return cells
         return GameManager._cell_layout(dynamite, board, CLASSIC_DYNAMITE, shuffled_dynamite, "dynamite")
 
     @staticmethod
@@ -266,6 +273,22 @@ class GameManager:
             game.current_player = player
             for coord, _ in game.get_all_pieces_of_color(player):
                 if any(game._legal_routes(coord).values()):
+                    return True
+        return False
+
+    @staticmethod
+    def _first_move_blasts(board, cells):
+        """Could either side land on one of these charges with its first move (through a
+        portal too)? board has its portals and clouds already."""
+        cells = set(cells)
+        for player in ("white", "black"):
+            game = GameState()
+            game.board.board = dict(board.board)
+            game.board.set_portals(board.portal_pairs())
+            game.board.set_clouds(board.clouds)
+            game.current_player = player
+            for coord, _ in game.get_all_pieces_of_color(player):
+                if cells & set(game._legal_routes(coord)):
                     return True
         return False
 
@@ -458,6 +481,19 @@ class GameManager:
                 raise ValueError(f"Invalid color: {color}")
             self._require_ongoing()
             self.result = {"kind": "resigned", "winner": other(color)}
+            self._version += 1
+            return self._state_response()
+        except ValueError as e:
+            return self._error_response(e)
+
+    @locked
+    def abandon(self, color):
+        """color has left an online game, and the opponent claims it"""
+        try:
+            if color not in ("white", "black"):
+                raise ValueError(f"Invalid color: {color}")
+            self._require_ongoing()
+            self.result = {"kind": "abandoned", "winner": other(color)}
             self._version += 1
             return self._state_response()
         except ValueError as e:

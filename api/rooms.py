@@ -10,6 +10,9 @@ server lets only the holder of White's key move White.
 In a team game two players share each army and take turns with it: White's first player
 moves, then Black's first, then White's second, Black's second, and round again. Their seats
 are "white" and "white2" ("black", "black2"). A side the computer plays has no seats.
+
+An open (public) online game is listed in the lobby, where anyone can take its free seats.
+Players there are strangers, so their messages are picked from a short list of phrases.
 """
 import secrets
 import time
@@ -21,8 +24,14 @@ IDLE_SECONDS = 24 * 3600      # a room nobody has touched for this long is remov
 MAX_ROOMS = 2000
 CONNECTED_SECONDS = 6         # a player heard from this recently counts as connected
 OFFERS = ("draw", "takeback")
-CHAT_LENGTH = 200             # characters in one team message
+CHAT_LENGTH = 200             # characters in one message
 CHAT_KEPT = 40                # messages kept per game
+LOBBY_SECONDS = 15            # an open game leaves the lobby when its players have been gone this long
+ABANDON_SECONDS = 60          # gone this long, a player's opponent may claim the game
+AWAY_STEP = 10
+# What strangers can say to each other in an open game (friends' games take any text)
+PHRASES = ("Hello!", "Good luck!", "Have fun!", "Nice move!", "Oops!", "Thanks!", "Well played!",
+           "Good game!", "One moment, please.", "Your turn!", "Good idea!", "Watch out!", "I'm not sure.")
 
 
 class Room:
@@ -36,13 +45,16 @@ class Room:
         self.revision = 0        # goes up when the seats or the offer change
         self.permanent = False
         self.teams = False       # two players a side, taking turns with the army
-        # Team games online: what teammates said to each other, oldest first. Each is
-        # {"id", "seat", "text", "move": {"from", "to", "piece"} or None, "version": the position
-        # it was about}
+        self.public = False      # an open game, listed in the lobby for anyone to join
+        self.ended = False       # the end of the game has been counted (api/stats.py)
+        # Online games: what the players said, oldest first. Each is {"id", "seat", "to": "team"
+        # (teammates only) or "all" (both sides), "text", "move": {"from", "to", "piece"} or None,
+        # "version": the position it was about}
         self.chat = []
         self._said = 0
         self._now = now
         self.touched = now()
+        self.created = self.touched
 
     # ==================== SEATS ====================
 
@@ -95,6 +107,35 @@ class Room:
             return color
         turns = len(game._position_keys) - 1
         return color + ("2" if (turns // 2) % 2 else "")
+
+    def gone_for(self, seat):
+        """Seconds since this seat's player was last heard from"""
+        return self._now() - self.last_seen.get(seat, -1e9)
+
+    def waiting_for_players(self):
+        """An online game some of whose seats are still free"""
+        return any(seat not in self.seats for seat in self.seat_ids())
+
+    def claimable(self, seat):
+        """May this player claim the game because the other side has left? Only once every
+        seat is taken, while the game goes on, and when all the other side's players have been
+        gone for ABANDON_SECONDS."""
+        if seat is None or self.manager._is_over() or self.waiting_for_players():
+            return False
+        rivals = [each for each in self.seats if each[:5] != seat[:5]]
+        return bool(rivals) and all(self.gone_for(each) >= ABANDON_SECONDS for each in rivals)
+
+    def claim(self, seat):
+        """Win the game because the other side has left it"""
+        with self.manager.lock:
+            if seat is None:
+                raise ValueError("You are watching this game")
+            if not self.claimable(seat):
+                raise ValueError("Your opponent has not left the game")
+            response = self.manager.abandon(other(seat[:5]))
+            if not response["success"]:
+                raise ValueError(response["error"])
+            self.clear_offer()
 
     def seen(self, seat):
         self.touched = self._now()
@@ -171,17 +212,24 @@ class Room:
             self.offer = None
             self.revision += 1
 
-    # ==================== TEAMMATES TALKING ====================
+    # ==================== TALKING ====================
 
-    def say(self, seat, text, move=None):
-        """A message to your teammate, maybe with a move you suggest for the position now.
-        Only your own team sees it."""
+    def say(self, seat, text, move=None, to="team"):
+        """A message to your teammate (to="team"), maybe with a move you suggest for the
+        position now, or to everyone playing (to="all"). In an open game the text is one of
+        PHRASES: the players there are strangers."""
         with self.manager.lock:
-            if not self.teams:
+            if to not in ("team", "all"):
+                raise ValueError('to must be "team" or "all"')
+            if to == "team" and not self.teams:
                 raise ValueError("Only team games have team messages")
             if seat is None:
                 raise ValueError("You are watching this game")
             text = " ".join(str(text or "").split())[:CHAT_LENGTH]
+            if text and self.public and text not in PHRASES:
+                raise ValueError("In an open game, pick one of the phrases")
+            if move is not None and to != "team":
+                raise ValueError("Moves are suggested to your teammate only")
             if move is not None:
                 game = self.manager.game
                 from_coord, to_coord = tuple(move["from"]), tuple(move["to"])
@@ -193,7 +241,7 @@ class Room:
             if not text and move is None:
                 raise ValueError("Say something, or suggest a move")
             self._said += 1
-            self.chat.append({"id": self._said, "seat": seat, "text": text, "move": move,
+            self.chat.append({"id": self._said, "seat": seat, "to": to, "text": text, "move": move,
                               "version": self.manager._version})
             del self.chat[:-CHAT_KEPT]
             self.revision += 1
@@ -215,8 +263,38 @@ class Room:
             "connected": {each: each in self.seats and now - self.last_seen.get(each, -1e9) <= CONNECTED_SECONDS
                           for each in seats},
             "offer": dict(self.offer) if self.offer is not None else None,
-            # Your own team's messages (nobody else's: watchers see none)
-            "chat": [dict(message) for message in self.chat if seat and message["seat"][:5] == seat[:5]],
+            # Messages to everyone playing, and your own team's (watchers see none)
+            "chat": [dict(message) for message in self.chat
+                     if seat and (message.get("to") == "all" or message["seat"][:5] == seat[:5])],
+            "public": self.public,
+            # In an open game, what the players can say (strangers pick phrases)
+            "phrases": list(PHRASES) if self.public else None,
+            # Seats whose player has gone, with roughly how long ago (in steps of AWAY_STEP
+            # seconds, so the answer does not change every second), and whether the other side
+            # has been gone long enough for you to claim the game
+            "away": {each: int(min(self.gone_for(each), 3600) // AWAY_STEP * AWAY_STEP) for each in seats
+                     if each in self.seats and self.gone_for(each) > CONNECTED_SECONDS},
+            "claimable": self.claimable(seat),
+        }
+
+    def listing(self):
+        """How the lobby shows this open game"""
+        options = self.manager.options or {}
+        computer = self.manager.computer
+        return {
+            "id": self.id,
+            "teams": self.teams,
+            "computer": computer["level"] if computer else None,
+            # The seats still free, by side ("white", "black")
+            "free": sorted({seat[:5] for seat in self.seat_ids() if seat not in self.seats}),
+            "players": len(self.seats),
+            "clock": options.get("clock"),
+            "rocks": options.get("rocks", True),
+            "portals": bool(options.get("portals")),
+            "dynamite": bool(options.get("dynamite")),
+            "clouds": bool(options.get("clouds")),
+            "moves": len(self.manager.game.move_history),
+            "waiting": round(self._now() - self.created),
         }
 
 
@@ -224,6 +302,7 @@ class Rooms:
     def __init__(self, now=time.monotonic):
         self._now = now
         self._rooms = {}
+        self.forgotten = None     # called with each room swept away (api/stats.py counts them)
         self.thinker = None       # how computer players think (see api/thinker.py); None: inline
         # Two rooms are always there: the developer test bench and the tests use them
         for room_id, kind in (("main", "local"), ("practice", "practice")):
@@ -270,7 +349,36 @@ class Rooms:
         cutoff = self._now() - IDLE_SECONDS
         for room_id in [room_id for room_id, room in self._rooms.items()
                         if not room.permanent and room.touched < cutoff]:
-            del self._rooms[room_id]
+            room = self._rooms.pop(room_id)
+            if self.forgotten is not None:
+                self.forgotten(room)
+
+    def open_games(self):
+        """The lobby: open games with a free seat, whose players are still here, oldest first"""
+        games = []
+        for room in self._rooms.values():
+            if (room.kind == "online" and room.public and room.waiting_for_players()
+                    and not room.manager._is_over()
+                    and any(room.gone_for(seat) <= LOBBY_SECONDS for seat in room.seats)):
+                games.append(room)
+        return sorted(games, key=lambda room: room.created)
+
+    def live(self):
+        """What is going on right now, for the admin page"""
+        now = self._now()
+        counts = {"rooms": 0, "playing": 0, "online_playing": 0, "players_connected": 0, "open_games": len(self.open_games())}
+        for room in self._rooms.values():
+            if room.permanent:
+                continue
+            counts["rooms"] += 1
+            recent = now - room.touched <= 60
+            waiting = room.kind == "online" and room.waiting_for_players()
+            if recent and room.kind != "practice" and not waiting and not room.manager._is_over():
+                counts["playing"] += 1
+                if room.kind == "online":
+                    counts["online_playing"] += 1
+            counts["players_connected"] += sum(1 for seat in room.seats if now - room.last_seen.get(seat, -1e9) <= CONNECTED_SECONDS)
+        return counts
 
     def __len__(self):
         return len(self._rooms)

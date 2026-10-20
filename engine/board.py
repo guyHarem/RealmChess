@@ -24,13 +24,33 @@ def mirrored(cell, size=8):
 CLASSIC_DYNAMITE = [(3, 2, 1), (4, 2, -1), (3, 5, 1), (4, 5, -1)]
 
 
+# Classic clouds: Space c4 and Sky f4, mirrored to Space c5 and Sky f5: two banks of cloud in
+# the middle of the upper layers. A stand-in until all the special cells are tuned together.
+CLASSIC_CLOUDS = [(2, 3, 2), (5, 3, 1), (2, 4, 2), (5, 4, 1)]
+
+
+def shuffled_clouds(rng, board, count=2):
+    """count random cloud cells in Space or the Sky, and their mirror images"""
+    size = board.size
+    free = [(x, y, z) for z in range(1, board.z_max + 1)
+            for y in range(2, size - 2) for x in range(size)
+            if board.board.get((x, y, z)) is None and (x, y, z) not in board.portals
+            and (x, y, z) not in board.dynamite]
+    while True:
+        chosen = rng.sample(free, count)
+        cells = set(chosen) | {mirrored(cell, size) for cell in chosen}
+        if len(cells) == 2 * count and all(cell in free for cell in cells):
+            return sorted(cells)
+
+
 def shuffled_dynamite(rng, board, count=2, taken=()):
     """count random charges and their mirror images: empty cells in the middle four ranks, not
     rocks or portals or the cells in `taken`"""
     size = board.size
     free = [(x, y, z) for z in range(board.z_min, board.z_max + 1)
             for y in range(2, size - 2) for x in range(size)
-            if board.board.get((x, y, z)) is None and (x, y, z) not in board.portals and (x, y, z) not in taken]
+            if board.board.get((x, y, z)) is None and (x, y, z) not in board.portals
+            and (x, y, z) not in board.clouds and (x, y, z) not in taken]
     while True:
         chosen = rng.sample(free, count)
         cells = set(chosen) | {mirrored(cell, size) for cell in chosen}

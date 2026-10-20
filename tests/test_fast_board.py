@@ -10,7 +10,8 @@ import unittest
 
 from ai.board import FastBoard, move_promotion
 from api.game_manager import GameManager
-from engine.board import CLASSIC_DYNAMITE, CLASSIC_PORTALS, shuffled_dynamite, shuffled_portals
+from engine.board import (CLASSIC_CLOUDS, CLASSIC_DYNAMITE, CLASSIC_PORTALS, shuffled_clouds, shuffled_dynamite,
+                          shuffled_portals)
 from engine.game_state import GameState
 from engine.pieces import King, Queen, Rook, Bishop, Knight, Pawn
 
@@ -86,7 +87,7 @@ class FastBoardTestCase(unittest.TestCase):
             game.promote_pawn(to_coord, PIECES[promotion](mover))
         board.make(move)
 
-    def play_out(self, game, rng, plies, tag, portals=False):
+    def play_out(self, game, rng, plies, tag, portals=False, clouds=False):
         board = FastBoard.from_game_state(game)
         for ply in range(plies):
             moves = self.assert_same_position(game, f"{tag} ply {ply}", board)
@@ -101,7 +102,9 @@ class FastBoardTestCase(unittest.TestCase):
                     if origin not in routes:
                         routes[origin] = game._legal_routes(origin)
                 trips = [m for m in moves if routes[board.describe(m)[0]].get(board.describe(m)[1])
-                         or board.describe(m)[1] in game.board.dynamite]
+                         or board.describe(m)[1] in game.board.dynamite
+                         or (clouds and (board.describe(m)[1] in game.board.clouds
+                                         or board.describe(m)[0] in game.board.clouds))]
                 if trips and rng.random() < 0.8:
                     self.play(game, board, rng.choice(trips))
                     continue
@@ -174,6 +177,39 @@ class TestAgainstTheEngine(FastBoardTestCase):
             game.board.set_dynamite(rng.sample(free, rng.randint(2, 6)))
             game.reset_tracking()
             self.play_out(game, rng, 8, f"dynamite position seed {seed}", portals=True)
+
+    def test_random_games_with_clouds(self):
+        """Clouds with dynamite and portals from the starting position"""
+        for seed in range(4):
+            rng = random.Random(8000 + seed)
+            game = GameState()
+            game.board.set_portals(CLASSIC_PORTALS)
+            game.board.set_clouds(CLASSIC_CLOUDS if seed < 2 else shuffled_clouds(rng, game.board, 3))
+            game.board.set_dynamite(shuffled_dynamite(rng, game.board))
+            game.reset_tracking()
+            self.play_out(game, rng, 40, f"cloud game seed {seed}", portals=True, clouds=True)
+
+    def test_random_positions_with_clouds(self):
+        """Scattered pieces around clouds, some of them sheltering in one, with a few charges"""
+        for seed in range(50):
+            rng = random.Random(9000 + seed)
+            game = self.random_game(rng, 8, -2, 2, rocks=seed % 2 == 0, count=rng.randint(6, 22))
+            if game is None:
+                continue
+            upper = [(x, y, z) for x in range(8) for y in range(8) for z in (1, 2)]
+            clouds = rng.sample(upper, rng.randint(3, 10))
+            sheltered = {cell: game.board.board.pop(cell) for cell in clouds
+                         if cell in game.board.board and type(game.board.board[cell]).__name__ != "King"}
+            clouds = [cell for cell in clouds if cell not in game.board.board]
+            game.board.set_clouds(clouds)
+            game.board.board.update(sheltered)
+            free = [(x, y, z) for x in range(8) for y in range(1, 7) for z in range(-2, 3)
+                    if game.board.board.get((x, y, z)) is None and (x, y, z) not in game.board.clouds]
+            game.board.set_dynamite(rng.sample(free, rng.randint(0, 3)))
+            game.reset_tracking()
+            if game.is_in_check("black" if game.current_player == "white" else "white"):
+                continue
+            self.play_out(game, rng, 8, f"cloud position seed {seed}", portals=True, clouds=True)
 
     def test_random_positions(self):
         """Scattered pieces on the full board, with and without rocks, then a few moves each"""

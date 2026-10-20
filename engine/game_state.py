@@ -658,7 +658,8 @@ class GameState:
                 path_clear = True
                 for x in range(king_coord[X] + direction, rook_coord[X], direction):
                     check_coord = (x, king_coord[Y], king_coord[Z])
-                    if self.board.get_piece(check_coord) is not None or check_coord in self.board.portals:
+                    if (self.board.get_piece(check_coord) is not None or check_coord in self.board.portals
+                            or check_coord in self.board.clouds):
                         path_clear = False
                         break
                 

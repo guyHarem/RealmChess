@@ -72,7 +72,7 @@ class FastBoard:
         """Copy a live game (which must not be waiting for a promotion choice)"""
         if game.pending_promotion is not None:
             raise ValueError("Promote the pawn before asking the computer to think")
-        if (game.board.portals or game.board.dynamite) and cls is FastBoard:
+        if (game.board.portals or game.board.dynamite or game.board.clouds) and cls is FastBoard:
             cls = SpecialBoard
         board = cls(*game.board.bounds, params=params)
         index = board.t.index
@@ -82,6 +82,8 @@ class FastBoard:
             for cell in game.board.dynamite:
                 board.dynamite.add(index[cell])
                 board.dynamite_key ^= board.t.z_dynamite[index[cell]]
+            for cell in game.board.clouds:
+                board.cloud[index[cell]] = True
         for coord, piece in game.board.board.items():
             name = type(piece).__name__
             if name == "Rock":
@@ -620,7 +622,9 @@ class SpecialBoard(FastBoard):
       - portals: a piece ending its move on an empty portal comes out on the other cell of the
         pair; moves name the cell a piece lands on;
       - dynamite: a piece ending its move on it sets it off, removing every piece but kings in
-        the 3x3x3 cube around it, rocks too, and setting off any dynamite there.
+        the 3x3x3 cube around it, rocks too, and setting off any dynamite there;
+      - clouds: a piece in one can't be captured or blown up, nor capture or attack; kings
+        can't enter; sliders and double steps can't pass through.
     The quick shortcuts FastBoard takes for king safety assume checks come along lines or from
     nearby, which portals and blasts break, so this board always does the full test: slower,
     and only used when the game has special cells."""
@@ -631,6 +635,7 @@ class SpecialBoard(FastBoard):
         self.dynamite = set()              # squares with a charge left
         self.dynamite_key = 0              # ... their part of the position's fingerprint
         self._blasts = []                  # per move made: what its blast removed, or None
+        self.cloud = [False] * self.t.n    # cloud squares
 
     def _full_key(self, en_passant_key):
         return super()._full_key(en_passant_key) ^ self.dynamite_key
@@ -656,7 +661,7 @@ class SpecialBoard(FastBoard):
             dynamite_key ^= tables.z_dynamite[charge]
             for square in tables.cube[charge]:
                 code = cells[square]
-                if code and code & 7 != KING:
+                if code and code & 7 != KING and not self.cloud[square]:
                     removed.append((square, code))
                     cells[square] = 0
                     if code != ROCK:
@@ -700,24 +705,28 @@ class SpecialBoard(FastBoard):
     # ---------- attacks ----------
 
     def _attacked_directly(self, square, by):
-        cells, tables, twin = self.cells, self.t, self.twin
+        """Attacked without going through a portal. A piece in a cloud attacks nothing, and
+        nothing passes over a cloud or an empty portal."""
+        cells, tables, twin, cloud = self.cells, self.t, self.twin, self.cloud
         knight = KNIGHT | by
         for origin in tables.knight[square]:
-            if cells[origin] == knight:
+            if cells[origin] == knight and not cloud[origin]:
                 return True
         king = KING | by
         for origin in tables.king_attacks[square]:
-            if cells[origin] & 15 == king:
+            if cells[origin] & 15 == king and not cloud[origin]:
                 return True
         pawn = PAWN | by
         for origin in tables.pawn_attackers[by >> 3][square]:
-            if cells[origin] & 15 == pawn:
+            if cells[origin] & 15 == pawn and not cloud[origin]:
                 return True
         for kind in (ROOK, BISHOP):
             slider, queen = kind | by, QUEEN | by
             for line in tables.slides[kind][square]:
                 for origin in line:
                     piece = cells[origin]
+                    if cloud[origin]:
+                        break
                     if piece:
                         piece &= 15
                         if piece == slider or piece == queen:
@@ -749,7 +758,7 @@ class SpecialBoard(FastBoard):
     # ---------- moves ----------
 
     def pseudo_moves(self):
-        cells, tables, twin = self.cells, self.t, self.twin
+        cells, tables, twin, cloud = self.cells, self.t, self.twin, self.cloud
         side = self.side
         colour = side >> 3
         enemy = ENEMY[colour]
@@ -760,7 +769,7 @@ class SpecialBoard(FastBoard):
             if key not in found or move & KIND:   # a double step keeps its en passant mark
                 found[key] = move
 
-        def land(origin, target, needs):
+        def land(origin, target, needs, king=False):
             """The square the move lands on, or -1. needs: 0 empty, 1 enemy, 2 either"""
             occupant = cells[target]
             if not occupant and twin[target] >= 0:
@@ -768,8 +777,12 @@ class SpecialBoard(FastBoard):
                 if target == origin:
                     return -1
                 occupant = cells[target]
+            if king and cloud[target]:
+                return -1
             if not occupant:
                 return target if needs != 1 else -1
+            if cloud[target] or cloud[origin]:
+                return -1      # nothing in a cloud is captured, nothing in one captures
             return target if needs != 0 and enemy[occupant] else -1
 
         for origin in list(self.squares[colour]):
@@ -791,7 +804,7 @@ class SpecialBoard(FastBoard):
                         pawn_move(landing)
                 if piece & UNMOVED:
                     for target, middle in tables.pawn_doubles[colour][origin]:
-                        if cells[middle] or twin[middle] >= 0:
+                        if cells[middle] or twin[middle] >= 0 or cloud[middle]:
                             continue
                         landing = land(origin, target, 0)
                         if landing >= 0:
@@ -800,16 +813,16 @@ class SpecialBoard(FastBoard):
                     landing = land(origin, target, 1)
                     if landing >= 0:
                         pawn_move(landing)
-                    elif target == self.ep:
+                    elif target == self.ep and not cloud[origin] and not cloud[self.ep_pawn]:
                         add(origin | target << 9 | EN_PASSANT)
             elif kind == KNIGHT or kind == KING:
                 for target in (tables.knight if kind == KNIGHT else tables.king)[origin]:
-                    landing = land(origin, target, 2)
+                    landing = land(origin, target, 2, kind == KING)
                     if landing >= 0:
                         add(origin | landing << 9)
                 if kind == KING:
                     for target in tables.king_takes[origin]:
-                        landing = land(origin, target, 1)
+                        landing = land(origin, target, 1, True)
                         if landing >= 0:
                             add(origin | landing << 9)
                     if piece & UNMOVED:
@@ -817,7 +830,7 @@ class SpecialBoard(FastBoard):
             else:
                 for line in tables.slides[kind][origin]:
                     for target in line:
-                        if cells[target] or twin[target] >= 0:
+                        if cells[target] or twin[target] >= 0 or cloud[target]:
                             landing = land(origin, target, 2)
                             if landing >= 0:
                                 add(origin | landing << 9)
@@ -832,7 +845,7 @@ class SpecialBoard(FastBoard):
         opponent = side ^ BLACK
         for line in self.t.row[king]:
             for distance, square in enumerate(line):
-                if twin[square] >= 0:
+                if twin[square] >= 0 or self.cloud[square]:
                     break
                 if cells[square]:
                     if cells[square] == rook and distance >= 2:

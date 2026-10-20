@@ -295,13 +295,16 @@ class GameState:
         current = from_coord
         for step in range(1, distance):
             current = GameState.coord_sum(current, dir_vector)
-            if self.board.get_piece(current) is not None or current in self.board.portals:
+            if (self.board.get_piece(current) is not None or current in self.board.portals
+                    or current in self.board.clouds):
                 return False  # path blocked
         
         return True  # path is clear
     
     def can_piece_attack_square(self, piece, from_coord, to_coord):
         """Check if a piece can attack a square (with path blocking), directly or through a portal"""
+        if from_coord in self.board.clouds:
+            return False   # a piece in a cloud attacks nothing
         if self._attacks_directly(piece, from_coord, to_coord):
             return True
         return any(self._attacks_directly(piece, from_coord, portal) for portal in self._portals_into(to_coord))
@@ -393,6 +396,13 @@ class GameState:
         return is_safe
     
     
+    # ==================== CLOUDS ====================
+    # Clouds are shelter above the Ground (board.clouds). A piece in a cloud can't be captured
+    # or blown up, but it can't capture or give check either: its attacks don't count. Kings
+    # can't enter one. Sliding pieces and double steps can't pass through one, empty or not.
+    # (The checks live where they apply: is_path_clear, can_piece_attack_square, _legal_routes,
+    # get_en_passant_moves and _explode.)
+
     # ==================== DYNAMITE ====================
     # A piece that ends its move on dynamite sets it off: every piece in the 3x3x3 cube around
     # it is removed, the piece itself too, except kings, which survive. Rocks there are
@@ -410,7 +420,7 @@ class GameState:
             charges.append(charge)
             for cell in self.board.blast_area(charge):
                 piece = self.board.board.get(cell)
-                if piece is not None and not isinstance(piece, King):
+                if piece is not None and not isinstance(piece, King) and cell not in self.board.clouds:
                     removed[cell] = piece
                     del self.board.board[cell]
                 if cell in self.board.dynamite:
@@ -457,6 +467,11 @@ class GameState:
                 return
             occupant = self.board.get_piece(landing)
             if isinstance(occupant, Rock):
+                return
+            # Clouds: nothing in one can be captured, nothing in one can capture, no king enters
+            if occupant is not None and (landing in self.board.clouds or from_coord in self.board.clouds):
+                return
+            if landing in self.board.clouds and isinstance(piece, King):
                 return
             if occupant is not None and occupant.color == piece.color:
                 return
@@ -699,6 +714,8 @@ class GameState:
         enemy_pawn = self.board.get_piece(enemy_pawn_coord)
         if enemy_pawn is None or enemy_pawn.color == pawn.color:
             return []
+        if pawn_coord in self.board.clouds or enemy_pawn_coord in self.board.clouds:
+            return []   # nothing captures from a cloud, nothing in one is captured
         
         # Our pawn must be able to capture onto the skipped square
         if skipped not in pawn.get_possible_moves(pawn_coord, self.board.bounds)[1]:

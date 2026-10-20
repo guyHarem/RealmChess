@@ -64,6 +64,8 @@ class Board:
         self.portals = {}
         # Dynamite: the cells still holding a charge (see set_dynamite)
         self.dynamite = set()
+        # Clouds: shelter cells above the Ground (see set_clouds)
+        self.clouds = set()
         # Only the full board has a starting position and rock layout;
         # smaller boards (lessons, scenarios) start empty and are filled in
         if self.is_standard():
@@ -79,8 +81,8 @@ class Board:
             a, b = (tuple(cell) for cell in pair)
             for cell in (a, b):
                 self.is_valid_coordinate(cell)
-                if cell in self.dynamite:
-                    raise ValueError("A portal cannot be on dynamite")
+                if cell in self.dynamite or cell in self.clouds:
+                    raise ValueError("A portal cannot be on dynamite or a cloud")
                 if cell in portals:
                     raise ValueError("A cell can be one portal only")
                 if type(self.board.get(cell)).__name__ == "Rock":
@@ -99,10 +101,28 @@ class Board:
             self.is_valid_coordinate(cell)
             if self.board.get(cell) is not None:
                 raise ValueError("Dynamite needs an empty cell")
-            if cell in self.portals:
-                raise ValueError("Dynamite cannot be on a portal")
+            if cell in self.portals or cell in self.clouds:
+                raise ValueError("Dynamite cannot be on a portal or a cloud")
             charges.add(cell)
         self.dynamite = charges
+
+    def set_clouds(self, cells):
+        """Put clouds on these cells, above the Ground only. A piece in a cloud can't be
+        captured or blown up, but can't capture or give check either; kings can't enter;
+        sliding pieces can't pass through (see GameState). The cells must be empty, and not
+        portals or dynamite."""
+        clouds = set()
+        for cell in cells:
+            cell = tuple(cell)
+            self.is_valid_coordinate(cell)
+            if cell[2] <= 0:
+                raise ValueError("Clouds are only above the Ground")
+            if self.board.get(cell) is not None:
+                raise ValueError("A cloud needs an empty cell")
+            if cell in self.portals or cell in self.dynamite:
+                raise ValueError("A cloud cannot be on a portal or dynamite")
+            clouds.add(cell)
+        self.clouds = clouds
 
     def blast_area(self, center):
         """The cells a blast at center reaches: the 3x3x3 cube around it, inside the board"""

@@ -127,5 +127,56 @@ class TestLayout(unittest.TestCase):
         self.assertEqual(len(board.blast_area((0, 0, 2))), 8)
 
 
+
+class TestDynamiteGames(unittest.TestCase):
+    """Through the API: starting games with dynamite, blasts, and replaying them elsewhere"""
+
+    def setUp(self):
+        from api.app import app
+        self.client = app.test_client()
+
+    def open(self, **body):
+        return self.client.post('/api/games', json={"kind": "local", **body}).get_json()
+
+    def test_classic_and_shuffled_dynamite_are_mirrored(self):
+        from engine.board import CLASSIC_DYNAMITE
+        self.assertEqual(sorted(map(tuple, self.open(dynamite="classic")["dynamite"])), sorted(CLASSIC_DYNAMITE))
+        cells = {tuple(cell) for cell in self.open(dynamite="shuffle", portals="classic")["dynamite"]}
+        self.assertEqual(len(cells), 4)
+        self.assertEqual({(x, 7 - y, z) for x, y, z in cells}, cells)
+        self.assertEqual(self.open()["dynamite"], [])
+
+    def test_a_blast_through_the_api_and_back(self):
+        data = self.open(dynamite=[[4, 3, 0]])
+        game = data["game_id"]
+        moved = self.client.post(f'/api/game/move?game={game}', json={"from": [4, 1, 0], "to": [4, 3, 0]}).get_json()
+        self.assertTrue(moved["success"], moved.get("error"))
+        entry = moved["move_history"][-1]
+        self.assertEqual((entry["special_move"], entry["charges"]), ("explosion", [[4, 3, 0]]))
+        self.assertEqual(moved["dynamite"], [])
+        self.assertNotIn("[4, 3, 0]", moved["board"])   # the pawn went up with it
+        undone = self.client.post(f'/api/game/undo?game={game}', json={}).get_json()
+        self.assertEqual((undone["dynamite"], undone["board"]["[4, 1, 0]"]), ([[4, 3, 0]], "Pawn(white)"))
+
+    def test_bad_dynamite_is_refused(self):
+        self.assertFalse(self.open(dynamite="everywhere")["success"])
+        self.assertFalse(self.open(dynamite=[[4, 1, 0]])["success"])   # a pawn stands there
+
+    def test_a_game_with_dynamite_replays_after_a_blast(self):
+        import json
+        from api import handoff
+        from api.rooms import Rooms
+        old, new = Rooms(), Rooms()
+        room = old.create("local")
+        room.manager.new_game(dynamite="shuffle")
+        charges = set(room.manager.game.board.dynamite)
+        room.manager.new_game(dynamite=[[4, 3, 0]])
+        room.manager.make_move((4, 1, 0), (4, 3, 0))
+        copy = handoff.restore(new, json.loads(json.dumps(handoff.snapshot(room))))
+        self.assertEqual(copy.manager.game.board.dynamite, set())
+        self.assertEqual(copy.manager.get_state()["move_history"], room.manager.get_state()["move_history"])
+        self.assertTrue(charges)
+
+
 if __name__ == '__main__':
     unittest.main()

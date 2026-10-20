@@ -8,7 +8,7 @@ from api.clock import ChessClock
 from api.thinker import Busy, think
 import random
 
-from engine.board import CLASSIC_PORTALS, EXTRA_PAWN_SQUARES, shuffled_portals
+from engine.board import CLASSIC_DYNAMITE, CLASSIC_PORTALS, EXTRA_PAWN_SQUARES, shuffled_dynamite, shuffled_portals
 from engine.game_state import GameState
 from engine.pieces import King, Queen, Rook, Bishop, Knight, Pawn, Rock
 
@@ -131,6 +131,8 @@ class GameManager:
             "pending_promotion": self.game.pending_promotion,
             # Pairs of linked cells: a piece ending its move on an empty one comes out of the other
             "portals": [[list(a), list(b)] for a, b in board.portal_pairs()],
+            # The cells with a charge left: a piece ending its move on one sets it off
+            "dynamite": [list(cell) for cell in sorted(board.dynamite)],
             "move_history": [dict(move) for move in self.game.move_history]
         }
 
@@ -143,11 +145,12 @@ class GameManager:
     # ==================== GAME SETUP ====================
 
     @locked
-    def new_game(self, rocks=True, move_limit=50, clock=None, computer=None, portals=None):
+    def new_game(self, rocks=True, move_limit=50, clock=None, computer=None, portals=None, dynamite=None):
         """clock: None for an untimed game, or {"initial": seconds, "increment": seconds}
         computer: None for two human players, or {"color": "black", "level": "easy" | "medium" | "hard"}
         portals: None, "classic", "shuffle" (a random mirrored layout), or the pairs themselves
-        [[[x,y,z], [x,y,z]], ...] (how a game is replayed)"""
+        [[[x,y,z], [x,y,z]], ...] (how a game is replayed)
+        dynamite: None, "classic", "shuffle", or the cells [[x,y,z], ...]"""
         try:
             if type(move_limit) is not int or not 1 <= move_limit <= 500:
                 raise ValueError("move_limit must be a whole number from 1 to 500")
@@ -177,12 +180,16 @@ class GameManager:
                 game.reset_tracking()
             if portals is not None:
                 game.board.set_portals(self._portal_layout(portals, game.board))
+            if dynamite is not None:
+                game.board.set_dynamite(self._dynamite_layout(dynamite, game.board))
+                game.reset_tracking()
             self._replace_game(game, new_clock, computer)
             self.options = {"rocks": bool(rocks), "move_limit": move_limit,
                             "clock": {"initial": initial, "increment": increment} if new_clock is not None else None,
                             "computer": computer,
                             # the exact cells, so a shuffled layout replays the same
-                            "portals": [[list(a), list(b)] for a, b in game.board.portal_pairs()] or None}
+                            "portals": [[list(a), list(b)] for a, b in game.board.portal_pairs()] or None,
+                            "dynamite": [list(cell) for cell in sorted(game.board.dynamite)] or None}
             return self._state_response()
         except ValueError as e:
             return self._error_response(e)
@@ -215,6 +222,22 @@ class GameManager:
                 cells.append(tuple(cell))
             pairs.append(cells)
         return pairs
+
+    @staticmethod
+    def _dynamite_layout(dynamite, board):
+        if dynamite == "classic":
+            # Where a classic charge would sit on a portal or a piece, it is left out
+            return [cell for cell in CLASSIC_DYNAMITE if cell not in board.portals and board.get_piece(cell) is None]
+        if dynamite == "shuffle":
+            return shuffled_dynamite(random.Random(), board)
+        if not isinstance(dynamite, list) or not 1 <= len(dynamite) <= 16:
+            raise ValueError('dynamite must be "classic", "shuffle" or a list of up to 16 cells')
+        cells = []
+        for cell in dynamite:
+            if not isinstance(cell, list) or len(cell) != 3 or not all(type(n) is int for n in cell):
+                raise ValueError("A dynamite cell is [x, y, z]")
+            cells.append(tuple(cell))
+        return cells
 
     @staticmethod
     def _first_move_trips(board, pairs):
@@ -498,7 +521,8 @@ class GameManager:
             board.set_piece(piece, coord)
 
     @locked
-    def setup_position(self, pieces, current_player="white", rocks=True, size=8, z_min=-2, z_max=2, portals=None):
+    def setup_position(self, pieces, current_player="white", rocks=True, size=8, z_min=-2, z_max=2, portals=None,
+                       dynamite=None):
         """Replace the whole position. pieces: list of {"coord", "type", "color"} ("Rock" needs no color).
         size/z_min/z_max choose the board: 8, -2, 2 is the full board; lessons use 5, -1, 1.
         portals: pairs of cells [[[x,y,z], [x,y,z]], ...], or None."""
@@ -521,6 +545,8 @@ class GameManager:
                 game.board.board[coord] = self._create_piece(item["type"], item.get("color"), coord, size)
             if portals:
                 game.board.set_portals(self._portal_layout(portals, game.board, pieces_allowed=True))
+            if dynamite:
+                game.board.set_dynamite(self._dynamite_layout(dynamite, game.board))
             game.current_player = current_player
             game.reset_tracking()
 

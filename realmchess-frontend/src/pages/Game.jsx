@@ -54,6 +54,15 @@ function outcomeOf(game) {
   return game.draw_reason ? { title: 'Draw', detail: reasons[game.draw_reason] } : null
 }
 
+// The rook's move in a castling (the history only records the king's): it comes from the
+// corner on the king's side and lands next to the king, on the side it came from
+function castlingRook(entry, size) {
+  if (entry?.special_move !== 'castling') return null
+  const [fx, y, z] = entry.from
+  const direction = Math.sign(entry.to[0] - fx)
+  return { from: [direction > 0 ? size - 1 : 0, y, z], to: [entry.to[0] - direction, y, z] }
+}
+
 // In a team game, which of a side's two players a seat is: "white2" is White 2
 const seatNumber = (seat) => (seat?.endsWith('2') ? 2 : 1)
 const seatName = (seat) => `${NAMES[seat.slice(0, 5)]} ${seatNumber(seat)}`
@@ -132,13 +141,35 @@ export default function Game({ id, joinSide = null }) {
         captured: lastEntry.special_move === 'en_passant' ? null : parsePiece(lastEntry.captured_piece),
       }
     : null
+  const size = game?.board_size?.size ?? FULL_BOARD.size
+  // What glides on the 3D board: the move just played (with the rook when castling), or after
+  // a take-back the pieces going back to where they were
+  const [glideState, setGlideState] = useState({ length: 0, last: null, glides: null })
+  if (history.length !== glideState.length || history.at(-1) !== glideState.last) {
+    const before = glideState
+    const undone = history.length < before.length
+      ? before.entries.slice(history.length).filter((entry) => entry.special_move !== 'promotion').reverse()
+      : []
+    const back = (entry) => ({ from: entry.to, to: entry.from })
+    setGlideState({
+      length: history.length,
+      last: history.at(-1),
+      entries: history,
+      glides: undone.length > 0 && before.length > 0
+        ? undone.flatMap((entry) => [back(entry), ...(castlingRook(entry, size) ? [back(castlingRook(entry, size))] : [])])
+        : lastMove
+          ? [lastMove, ...(castlingRook(lastEntry, size) ? [castlingRook(lastEntry, size)] : [])]
+          : null,
+    })
+  }
+  const glides = glideState.glides
+
   // The king of the side to move, while it is in check (or checkmated)
   const inCheck = game?.status === 'check' || game?.status === 'checkmate'
   const checkKey = inCheck ? Object.keys(board).find((key) => board[key] === `King(${player})`) : null
   const check = checkKey ? JSON.parse(checkKey) : null
   const captured = capturedBy(history)
   const points = capturedPoints(captured)
-  const size = game?.board_size?.size ?? FULL_BOARD.size
   const layers = game?.board_size ? layersOf(game.board_size) : FULL_BOARD.layers
   const shownLayer = layers.includes(activeLayer) ? activeLayer : 0
   const quiet = game ? Math.floor(game.halfmove_clock / 2) : 0
@@ -466,6 +497,7 @@ export default function Game({ id, joinSide = null }) {
         selected={selected}
         legalMoves={legalMoves}
         lastMove={lastMove}
+        glides={glides}
         check={check}
         suggestion={suggestion}
         showMoveBalls={settings.showLegalMoves}

@@ -37,8 +37,10 @@ It was called CubeChess until October 2026. Play it at [realmchess.com](https://
   top view below for tapping, the rest behind a Menu button)
 - ✅ Finished lessons, solved puzzles and setup choices are remembered in the browser
 - ✅ Sounds for moves, captures, check and the end of a game (with a Sound switch); the piece
-  just moved glides to its new cell, a captured piece fades away, and a red pulse marks a king
-  in check on the 3D board
+  just moved glides to its new cell (the rook too when castling, and back again on a
+  take-back), a captured piece fades away, and a red pulse marks a king in check on the 3D board
+- ✅ Hints from the computer in games against it and on one screen; in online team games a
+  team chat, and suggesting a move on your teammate's turn
 - 🔧 Developer test bench at `#/bench` for checking backend behavior
 
 ### Phase 3: Polish & Deployment
@@ -414,13 +416,8 @@ This project is built with a learning-first approach:
 
 ## Next Steps
 
-1. Re-tune the computer player for the 24-piece start (`tools/tune.py`, self-play); its
-   scoring was tuned before the Space and Abyss pawns
-2. A way for online teammates to talk (short messages or suggested moves)
-3. A lesson on the edge layers: the Space and Abyss pawns, and how pawns change layer
-4. The setup page fitting one phone screen, like the other pages
-5. Animations for castling (the rook) and for moves taken back
-6. Later, once people play: accounts, ratings and finding an opponent; games that survive a
+1. Get real players: share the link, try 2 against 2, and see what confuses newcomers
+2. Later, once people play: accounts, ratings and finding an opponent; games that survive a
    crash (needs storage that outlives the server, which costs extra on Render)
 
 ---

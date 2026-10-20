@@ -392,6 +392,7 @@ function Scene({
   legalMoves,
   goal,
   lastMove,
+  glides,
   check,
   suggestion,
   showMoveBalls,
@@ -411,9 +412,13 @@ function Scene({
   const visible = (z) => !solo || z === activeLayer
   const isLegal = (coord) => legalMoves.some((move) => sameCoord(move, coord))
   const rankFor = (coord) => (isLegal(coord) ? TARGET : coord[2] === activeLayer ? ON_LAYER : OTHER)
-  // The piece that has just arrived glides in from where it was (only read when it first appears)
-  const glidesFrom = (coord) =>
-    interactive && lastMove && sameCoord(coord, lastMove.to) && visible(lastMove.from[2]) ? cellPosition(lastMove.from) : undefined
+  // A piece that has just arrived glides in from where it was (only read when it first
+  // appears): the last move by default, or the moves given (a castling rook, a take-back)
+  const moving = glides ?? (lastMove ? [lastMove] : [])
+  const glidesFrom = (coord) => {
+    const glide = interactive && moving.find((move) => sameCoord(coord, move.to))
+    return glide && visible(glide.from[2]) ? cellPosition(glide.from) : undefined
+  }
 
   const home = useMemo(
     () => ({
@@ -515,6 +520,7 @@ export default function CubeBoard({
   legalMoves = [],
   goal = null,
   lastMove = null, // { from, to, index (in the move history), captured: { type, color } or null }
+  glides = null, // [{ from, to }]: pieces that have just arrived and where they came from (default: lastMove)
   check = null, // the cell of a king in check
   suggestion = null, // { from, to }: a move suggested by a hint or a teammate
   showMoveBalls = true,
@@ -541,6 +547,7 @@ export default function CubeBoard({
         legalMoves={legalMoves}
         goal={goal}
         lastMove={lastMove}
+        glides={glides}
         check={check}
         suggestion={suggestion}
         showMoveBalls={showMoveBalls}

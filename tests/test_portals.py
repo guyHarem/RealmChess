@@ -3,6 +3,7 @@ Portals: a piece that ends its move on an empty portal comes out on the other ce
 """
 import unittest
 
+from engine.board import CLASSIC_PORTALS
 from engine.game_state import GameState
 from engine.pieces import Bishop, King, Knight, Pawn, Queen, Rook
 from tests.test_game_state import custom_game
@@ -133,6 +134,55 @@ class TestLayouts(unittest.TestCase):
             game.board.set_portals([(A, A2), (A2, B)])
         game.board.set_portals([(A, A2), (B, B2)])
         self.assertEqual(game.board.portal_pairs(), sorted([tuple(sorted((A, A2))), tuple(sorted((B, B2)))]))
+
+
+
+class TestPortalGames(unittest.TestCase):
+    """Through the API: starting games with portals, and replaying them on another server"""
+
+    def setUp(self):
+        from api.app import app
+        self.client = app.test_client()
+
+    def open(self, **body):
+        return self.client.post('/api/games', json={"kind": "local", **body}).get_json()
+
+    def test_classic_portals(self):
+        data = self.open(portals="classic")
+        self.assertTrue(data["success"], data.get("error"))
+        self.assertEqual(sorted(map(sorted, data["portals"])),
+                         sorted(sorted([list(a), list(b)]) for a, b in CLASSIC_PORTALS))
+        self.assertEqual(self.open()["portals"], [])
+
+    def test_shuffled_portals_are_mirrored_and_kept(self):
+        data = self.open(portals="shuffle")
+        cells = [tuple(cell) for pair in data["portals"] for cell in pair]
+        self.assertEqual(len(set(cells)), 4)
+        self.assertEqual({(x, 7 - y, z) for x, y, z in cells}, set(cells))   # the same for both sides
+        self.assertTrue(all(z != 0 and 2 <= y <= 5 for x, y, z in cells))
+
+    def test_a_trip_through_the_api(self):
+        game = self.open(portals=[[[4, 2, 0], [4, 5, 2]]])["game_id"]
+        moves = self.client.get(f'/api/game/legal-moves?game={game}&from=[4,1,0]').get_json()["legal_moves"]
+        self.assertIn([4, 5, 2], moves)
+        moved = self.client.post(f'/api/game/move?game={game}', json={"from": [4, 1, 0], "to": [4, 5, 2]}).get_json()
+        self.assertTrue(moved["success"], moved.get("error"))
+        self.assertEqual(moved["move_history"][-1]["via"], [4, 2, 0])
+
+    def test_bad_layouts_are_refused(self):
+        self.assertFalse(self.open(portals="everywhere")["success"])
+        self.assertFalse(self.open(portals=[[[4, 1, 0], [4, 5, 2]]])["success"])   # a pawn stands there
+
+    def test_a_shuffled_game_replays_with_the_same_portals(self):
+        from api import handoff
+        from api.rooms import Rooms
+        import json
+        old, new = Rooms(), Rooms()
+        room = old.create("local")
+        room.manager.new_game(portals="shuffle")
+        pairs = room.manager.game.board.portal_pairs()
+        copy = handoff.restore(new, json.loads(json.dumps(handoff.snapshot(room))))
+        self.assertEqual(copy.manager.game.board.portal_pairs(), pairs)
 
 
 if __name__ == '__main__':

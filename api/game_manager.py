@@ -6,7 +6,9 @@ import time
 from ai.levels import LEVELS, accepts_draw, think_time
 from api.clock import ChessClock
 from api.thinker import Busy, think
-from engine.board import EXTRA_PAWN_SQUARES
+import random
+
+from engine.board import CLASSIC_PORTALS, EXTRA_PAWN_SQUARES, shuffled_portals
 from engine.game_state import GameState
 from engine.pieces import King, Queen, Rook, Bishop, Knight, Pawn, Rock
 
@@ -127,6 +129,8 @@ class GameManager:
             "clock": self.clock.to_json() if self.clock is not None else None,
             "computer": dict(self.computer) if self.computer is not None else None,
             "pending_promotion": self.game.pending_promotion,
+            # Pairs of linked cells: a piece ending its move on an empty one comes out of the other
+            "portals": [[list(a), list(b)] for a, b in board.portal_pairs()],
             "move_history": [dict(move) for move in self.game.move_history]
         }
 
@@ -139,9 +143,11 @@ class GameManager:
     # ==================== GAME SETUP ====================
 
     @locked
-    def new_game(self, rocks=True, move_limit=50, clock=None, computer=None):
+    def new_game(self, rocks=True, move_limit=50, clock=None, computer=None, portals=None):
         """clock: None for an untimed game, or {"initial": seconds, "increment": seconds}
-        computer: None for two human players, or {"color": "black", "level": "easy" | "medium" | "hard"}"""
+        computer: None for two human players, or {"color": "black", "level": "easy" | "medium" | "hard"}
+        portals: None, "classic", "shuffle" (a random mirrored layout), or the pairs themselves
+        [[[x,y,z], [x,y,z]], ...] (how a game is replayed)"""
         try:
             if type(move_limit) is not int or not 1 <= move_limit <= 500:
                 raise ValueError("move_limit must be a whole number from 1 to 500")
@@ -169,13 +175,38 @@ class GameManager:
                     if isinstance(piece, Rock):
                         board.remove_piece(coord)
                 game.reset_tracking()
+            if portals is not None:
+                game.board.set_portals(self._portal_layout(portals, game.board))
             self._replace_game(game, new_clock, computer)
             self.options = {"rocks": bool(rocks), "move_limit": move_limit,
                             "clock": {"initial": initial, "increment": increment} if new_clock is not None else None,
-                            "computer": computer}
+                            "computer": computer,
+                            # the exact cells, so a shuffled layout replays the same
+                            "portals": [[list(a), list(b)] for a, b in game.board.portal_pairs()] or None}
             return self._state_response()
         except ValueError as e:
             return self._error_response(e)
+
+    @staticmethod
+    def _portal_layout(portals, board):
+        if portals == "classic":
+            return CLASSIC_PORTALS
+        if portals == "shuffle":
+            return shuffled_portals(random.Random(), board)
+        if (not isinstance(portals, list) or not 1 <= len(portals) <= 4 or
+                not all(isinstance(pair, list) and len(pair) == 2 for pair in portals)):
+            raise ValueError('portals must be "classic", "shuffle" or a list of up to 4 pairs of cells')
+        pairs = []
+        for pair in portals:
+            cells = []
+            for cell in pair:
+                if not isinstance(cell, list) or len(cell) != 3 or not all(type(n) is int for n in cell):
+                    raise ValueError("A portal cell is [x, y, z]")
+                if board.get_piece(tuple(cell)) is not None:
+                    raise ValueError("A portal cannot be where a piece stands")
+                cells.append(tuple(cell))
+            pairs.append(cells)
+        return pairs
 
     def _replace_game(self, game, clock=None, computer=None):
         self.options = None   # new_game() fills it in; any other new position cannot be replayed
@@ -441,9 +472,10 @@ class GameManager:
             board.set_piece(piece, coord)
 
     @locked
-    def setup_position(self, pieces, current_player="white", rocks=True, size=8, z_min=-2, z_max=2):
+    def setup_position(self, pieces, current_player="white", rocks=True, size=8, z_min=-2, z_max=2, portals=None):
         """Replace the whole position. pieces: list of {"coord", "type", "color"} ("Rock" needs no color).
-        size/z_min/z_max choose the board: 8, -2, 2 is the full board; lessons use 5, -1, 1."""
+        size/z_min/z_max choose the board: 8, -2, 2 is the full board; lessons use 5, -1, 1.
+        portals: pairs of cells [[[x,y,z], [x,y,z]], ...], or None."""
         try:
             if current_player not in ("white", "black"):
                 raise ValueError(f"Invalid color: {current_player}")
@@ -461,6 +493,8 @@ class GameManager:
                 coord = item["coord"]
                 game.board.is_valid_coordinate(coord)
                 game.board.board[coord] = self._create_piece(item["type"], item.get("color"), coord, size)
+            if portals:
+                game.board.set_portals(self._portal_layout(portals, game.board))
             game.current_player = current_player
             game.reset_tracking()
 

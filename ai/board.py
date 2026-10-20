@@ -159,7 +159,7 @@ class FastBoard:
 
     def key_of_engine_position(self, position_key):
         """The same fingerprint, worked out from one of GameState's remembered positions"""
-        pieces, player, castling, en_passant = position_key
+        pieces, player, castling, en_passant, dynamite = position_key
         tables = self.t
         key = 0
         for coord, text in pieces:
@@ -170,6 +170,8 @@ class FastBoard:
         for _, target in en_passant:
             key ^= tables.z_en_passant[tables.index[target]]
             break  # every capture lands on the same square
+        for coord in dynamite:
+            key ^= tables.z_dynamite[tables.index[coord]]
         return key ^ tables.z_black_to_move if player == "black" else key
 
     # ==================== ATTACKS ====================

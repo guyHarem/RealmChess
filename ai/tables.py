@@ -116,6 +116,13 @@ class Tables:
         self.z_black_to_move = rng.getrandbits(64)
         self.z_castle = [rng.getrandbits(64) for _ in range(n)]
         self.z_en_passant = [rng.getrandbits(64) for _ in range(n)]
+        self.z_dynamite = [rng.getrandbits(64) for _ in range(n)]
+        # Each square's 3x3x3 cube (itself included), for dynamite blasts
+        self.cube = [tuple(index[(x2, y2, z2)]
+                           for z2 in range(max(z - 1, z_min), min(z + 1, z_max) + 1)
+                           for y2 in range(max(y - 1, 0), min(y + 1, size - 1) + 1)
+                           for x2 in range(max(x - 1, 0), min(x + 1, size - 1) + 1))
+                     for x, y, z in self.coords]
 
         # distance[a][b]: king steps from a to b on an empty board (sideways/diagonal in the
         # layer, plus one step per layer)

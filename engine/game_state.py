@@ -186,13 +186,21 @@ class GameState:
         
         # Execute the move
         self._execute_move(from_coord, to_coord)
+        if to_coord in self.board.dynamite:
+            blast = self._explode(to_coord)
+            self._undo_stack[-1]['blast'] = blast
+            entry = self.move_history[-1]
+            entry['special_move'] = entry['special_move'] or "explosion"
+            # What the blast removed (the mover too, unless a king), and the dynamite it used
+            entry['blast'] = [(cell, str(removed)) for cell, removed in sorted(blast["removed"].items())]
+            entry['charges'] = sorted(blast["charges"])
         
         # Side effects
         if isinstance(piece, (Pawn, King, Rook)):
             piece.has_moved = True
         
-        # Captures and pawn moves can't be taken back, so they restart the move-limit count
-        if isinstance(piece, Pawn) or captured_piece is not None:
+        # Captures, blasts and pawn moves can't be taken back, so they restart the move-limit count
+        if isinstance(piece, Pawn) or captured_piece is not None or 'blast' in self._undo_stack[-1]:
             self.halfmove_clock = 0
         else:
             self.halfmove_clock += 1
@@ -366,11 +374,14 @@ class GameState:
         
         # Execute
         self._execute_move(from_coord, to_coord)
+        blast = self._explode(to_coord) if to_coord in self.board.dynamite else None
         
         # Check if king is safe
         is_safe = not self.is_in_check(piece.color)
         
         # Restore state
+        if blast is not None:
+            self._unexplode(blast)
         self.board.move_piece(to_coord, from_coord)
         if captured_piece is not None:
             self.board.set_piece(captured_piece, to_coord)
@@ -382,6 +393,36 @@ class GameState:
         return is_safe
     
     
+    # ==================== DYNAMITE ====================
+    # A piece that ends its move on dynamite sets it off: every piece in the 3x3x3 cube around
+    # it is removed, the piece itself too, except kings, which survive. Rocks there are
+    # destroyed, and any other dynamite there goes off as well. The board itself stays whole.
+
+    def _explode(self, center):
+        """Set off the dynamite at center. Returns what undoing it needs: {"removed": {coord:
+        piece or rock}, "charges": the dynamite cells used up}"""
+        removed, charges, waiting = {}, [], [center]
+        while waiting:
+            charge = waiting.pop()
+            if charge not in self.board.dynamite:
+                continue
+            self.board.dynamite.discard(charge)
+            charges.append(charge)
+            for cell in self.board.blast_area(charge):
+                piece = self.board.board.get(cell)
+                if piece is not None and not isinstance(piece, King):
+                    removed[cell] = piece
+                    del self.board.board[cell]
+                if cell in self.board.dynamite:
+                    waiting.append(cell)
+        return {"removed": removed, "charges": charges}
+
+    def _unexplode(self, blast):
+        for cell in blast["charges"]:
+            self.board.dynamite.add(cell)
+        for cell, piece in blast["removed"].items():
+            self.board.board[cell] = piece
+
     # ==================== PORTALS ====================
     # A piece that ends its move on an empty portal comes out on the other cell of its pair:
     # an empty cell, or an enemy piece there is captured, never on its own piece. A piece
@@ -689,6 +730,10 @@ class GameState:
             self.pending_promotion = to_coord
             return self.undo_move()
         
+        # A blast: put back everything it removed (the mover too) and its dynamite
+        if 'blast' in record:
+            self._unexplode(record['blast'])
+        
         # Move piece back
         self.board.move_piece(to_coord, from_coord)
         
@@ -815,7 +860,9 @@ class GameState:
         same pieces on the same squares, same player to move, same castling and en passant options"""
         pieces = frozenset((coord, str(piece)) for coord, piece in self.board.board.items()
                            if not isinstance(piece, Rock))
-        return (pieces, self.current_player, self._castling_rights(), self._en_passant_rights())
+        # (The dynamite left also says which rocks are left: only blasts remove rocks)
+        return (pieces, self.current_player, self._castling_rights(), self._en_passant_rights(),
+                frozenset(self.board.dynamite))
     
     def is_threefold_repetition(self):
         """Check if the current position has now occurred three times"""

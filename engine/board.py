@@ -43,6 +43,8 @@ class Board:
         self.board = dict()
         # Portals: each portal cell -> the other cell of its pair (see set_portals)
         self.portals = {}
+        # Dynamite: the cells still holding a charge (see set_dynamite)
+        self.dynamite = set()
         # Only the full board has a starting position and rock layout;
         # smaller boards (lessons, scenarios) start empty and are filled in
         if self.is_standard():
@@ -58,6 +60,8 @@ class Board:
             a, b = (tuple(cell) for cell in pair)
             for cell in (a, b):
                 self.is_valid_coordinate(cell)
+                if cell in self.dynamite:
+                    raise ValueError("A portal cannot be on dynamite")
                 if cell in portals:
                     raise ValueError("A cell can be one portal only")
                 if type(self.board.get(cell)).__name__ == "Rock":
@@ -66,6 +70,27 @@ class Board:
                 raise ValueError("A portal pair needs two different cells")
             portals[a], portals[b] = b, a
         self.portals = portals
+
+    def set_dynamite(self, cells):
+        """Put dynamite on these cells. A piece ending its move on one sets it off (see
+        GameState). The cells must be inside the board, empty, and not portals or rocks."""
+        charges = set()
+        for cell in cells:
+            cell = tuple(cell)
+            self.is_valid_coordinate(cell)
+            if self.board.get(cell) is not None:
+                raise ValueError("Dynamite needs an empty cell")
+            if cell in self.portals:
+                raise ValueError("Dynamite cannot be on a portal")
+            charges.add(cell)
+        self.dynamite = charges
+
+    def blast_area(self, center):
+        """The cells a blast at center reaches: the 3x3x3 cube around it, inside the board"""
+        x0, y0, z0 = center
+        return [(x, y, z) for z in range(max(z0 - 1, self.z_min), min(z0 + 1, self.z_max) + 1)
+                for y in range(max(y0 - 1, 0), min(y0 + 1, self.size - 1) + 1)
+                for x in range(max(x0 - 1, 0), min(x0 + 1, self.size - 1) + 1)]
 
     def portal_pairs(self):
         """The portal pairs, each once, in a stable order"""

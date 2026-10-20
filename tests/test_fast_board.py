@@ -10,7 +10,7 @@ import unittest
 
 from ai.board import FastBoard, move_promotion
 from api.game_manager import GameManager
-from engine.board import CLASSIC_PORTALS, shuffled_portals
+from engine.board import CLASSIC_DYNAMITE, CLASSIC_PORTALS, shuffled_dynamite, shuffled_portals
 from engine.game_state import GameState
 from engine.pieces import King, Queen, Rook, Bishop, Knight, Pawn
 
@@ -93,13 +93,15 @@ class FastBoardTestCase(unittest.TestCase):
             if not moves:
                 break
             if portals:
-                # Go through a portal whenever one is open: trips, captures and checks through them
+                # Go through a portal or onto dynamite whenever possible: trips, blasts, and the
+            # captures and checks they bring
                 routes = {}
                 for m in moves:
                     origin = board.describe(m)[0]
                     if origin not in routes:
                         routes[origin] = game._legal_routes(origin)
-                trips = [m for m in moves if routes[board.describe(m)[0]].get(board.describe(m)[1])]
+                trips = [m for m in moves if routes[board.describe(m)[0]].get(board.describe(m)[1])
+                         or board.describe(m)[1] in game.board.dynamite]
                 if trips and rng.random() < 0.8:
                     self.play(game, board, rng.choice(trips))
                     continue
@@ -147,6 +149,31 @@ class TestAgainstTheEngine(FastBoardTestCase):
             if game.is_in_check("black" if game.current_player == "white" else "white"):
                 continue   # the portals put the side that just moved in check
             self.play_out(game, rng, 8, f"portal position seed {seed}", portals=True)
+
+    def test_random_games_with_dynamite(self):
+        """The classic dynamite (with portals in some games), and shuffled charges, from the
+        starting position, stepping on dynamite whenever possible"""
+        for seed in range(4):
+            rng = random.Random(6000 + seed)
+            game = GameState()
+            if seed % 2:
+                game.board.set_portals(CLASSIC_PORTALS)
+            game.board.set_dynamite(CLASSIC_DYNAMITE if seed < 2 else shuffled_dynamite(rng, game.board, 4))
+            game.reset_tracking()
+            self.play_out(game, rng, 40, f"dynamite game seed {seed}", portals=True)
+
+    def test_random_positions_with_dynamite(self):
+        """Scattered pieces among charges, where blasts, chains and uncovered checks come up"""
+        for seed in range(50):
+            rng = random.Random(7000 + seed)
+            game = self.random_game(rng, 8, -2, 2, rocks=seed % 2 == 0, count=rng.randint(6, 22))
+            if game is None:
+                continue
+            free = [(x, y, z) for x in range(8) for y in range(1, 7) for z in range(-2, 3)
+                    if game.board.board.get((x, y, z)) is None]
+            game.board.set_dynamite(rng.sample(free, rng.randint(2, 6)))
+            game.reset_tracking()
+            self.play_out(game, rng, 8, f"dynamite position seed {seed}", portals=True)
 
     def test_random_positions(self):
         """Scattered pieces on the full board, with and without rocks, then a few moves each"""

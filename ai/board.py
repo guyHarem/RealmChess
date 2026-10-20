@@ -72,13 +72,16 @@ class FastBoard:
         """Copy a live game (which must not be waiting for a promotion choice)"""
         if game.pending_promotion is not None:
             raise ValueError("Promote the pawn before asking the computer to think")
-        if game.board.portals and cls is FastBoard:
-            cls = PortalBoard
+        if (game.board.portals or game.board.dynamite) and cls is FastBoard:
+            cls = SpecialBoard
         board = cls(*game.board.bounds, params=params)
         index = board.t.index
-        if game.board.portals:
+        if cls is SpecialBoard:
             for cell, twin in game.board.portals.items():
                 board.twin[index[cell]] = index[twin]
+            for cell in game.board.dynamite:
+                board.dynamite.add(index[cell])
+                board.dynamite_key ^= board.t.z_dynamite[index[cell]]
         for coord, piece in game.board.board.items():
             name = type(piece).__name__
             if name == "Rock":
@@ -612,16 +615,82 @@ class FastBoard:
         return None
 
 
-class PortalBoard(FastBoard):
-    """A FastBoard for a game with portals (see GameState: a piece ending its move on an empty
-    portal comes out on the other cell of the pair). Moves name the cell a piece lands on. The
-    quick shortcuts FastBoard takes for king safety assume checks come along lines or from
-    nearby, which a portal breaks, so this board always does the full test: slower, and only
-    used when the game has portals."""
+class SpecialBoard(FastBoard):
+    """A FastBoard for a game with special cells (see GameState):
+      - portals: a piece ending its move on an empty portal comes out on the other cell of the
+        pair; moves name the cell a piece lands on;
+      - dynamite: a piece ending its move on it sets it off, removing every piece but kings in
+        the 3x3x3 cube around it, rocks too, and setting off any dynamite there.
+    The quick shortcuts FastBoard takes for king safety assume checks come along lines or from
+    nearby, which portals and blasts break, so this board always does the full test: slower,
+    and only used when the game has special cells."""
 
     def __init__(self, size=8, z_min=-2, z_max=2, params=None):
         super().__init__(size, z_min, z_max, params)
         self.twin = [-1] * self.t.n        # each portal square -> the other square of its pair
+        self.dynamite = set()              # squares with a charge left
+        self.dynamite_key = 0              # ... their part of the position's fingerprint
+        self._blasts = []                  # per move made: what its blast removed, or None
+
+    def _full_key(self, en_passant_key):
+        return super()._full_key(en_passant_key) ^ self.dynamite_key
+
+    # ---------- blasts ----------
+
+    def make(self, move, track=True):
+        target = (move >> 9) & SQUARE
+        if target not in self.dynamite:
+            self._blasts.append(None)
+            return super().make(move, track)
+        super().make(move, track=False)
+        cells, tables = self.cells, self.t
+        pst, near, distance, z = self.pst, self.near, tables.distance, tables.z_piece
+        removed, charges, waiting = [], [], [target]
+        score, pieces_key, dynamite_key = self.score, self.pieces_key, self.dynamite_key
+        while waiting:
+            charge = waiting.pop()
+            if charge not in self.dynamite:
+                continue
+            self.dynamite.remove(charge)
+            charges.append(charge)
+            dynamite_key ^= tables.z_dynamite[charge]
+            for square in tables.cube[charge]:
+                code = cells[square]
+                if code and code & 7 != KING:
+                    removed.append((square, code))
+                    cells[square] = 0
+                    if code != ROCK:
+                        base = code & 15
+                        colour = (code & BLACK) >> 3
+                        score -= pst[base][square]
+                        enemy_king = self.kings[colour ^ 1]
+                        if enemy_king >= 0:
+                            score -= near[base][distance[enemy_king][square]]
+                        pieces_key ^= z[base][square]
+                        self.squares[colour].remove(square)
+                        self.counts[base] -= 1
+                if square in self.dynamite:
+                    waiting.append(square)
+        self._blasts.append((removed, charges, self.dynamite_key))
+        self.score, self.pieces_key, self.dynamite_key = score, pieces_key, dynamite_key
+        self.half = 0
+        self.ep = self.ep_pawn = -1   # a pawn that stepped on it is gone
+        if track:
+            self.rights_key = self._castling_key()
+            self.key = self._full_key(0)
+
+    def unmake(self):
+        blast = self._blasts.pop()
+        if blast is not None:
+            removed, charges, self.dynamite_key = blast
+            cells = self.cells
+            for square, code in removed:
+                cells[square] = code
+                if code != ROCK:
+                    self.squares[(code & BLACK) >> 3].add(square)
+                    self.counts[code & 15] += 1
+            self.dynamite.update(charges)
+        super().unmake()
 
     def _landing(self, target):
         """Where a move ending on target lands: through an empty portal, on its twin"""
@@ -710,7 +779,7 @@ class PortalBoard(FastBoard):
                 promotes = tables.promotes[colour]
 
                 def pawn_move(target, extra=0):
-                    if promotes[target]:
+                    if promotes[target] and target not in self.dynamite:   # a blown-up pawn never promotes
                         for choice in PROMOTIONS:
                             add(origin | target << 9 | choice << 18)
                     else:

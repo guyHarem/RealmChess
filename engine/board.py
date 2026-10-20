@@ -19,6 +19,25 @@ def mirrored(cell, size=8):
     return (x, size - 1 - y, z)
 
 
+# Classic dynamite: Sky d3 and Dungeon e3, mirrored to Sky d6 and Dungeon e6. A stand-in like
+# the classic portals, until all the special cells are tuned together.
+CLASSIC_DYNAMITE = [(3, 2, 1), (4, 2, -1), (3, 5, 1), (4, 5, -1)]
+
+
+def shuffled_dynamite(rng, board, count=2, taken=()):
+    """count random charges and their mirror images: empty cells in the middle four ranks, not
+    rocks or portals or the cells in `taken`"""
+    size = board.size
+    free = [(x, y, z) for z in range(board.z_min, board.z_max + 1)
+            for y in range(2, size - 2) for x in range(size)
+            if board.board.get((x, y, z)) is None and (x, y, z) not in board.portals and (x, y, z) not in taken]
+    while True:
+        chosen = rng.sample(free, count)
+        cells = set(chosen) | {mirrored(cell, size) for cell in chosen}
+        if len(cells) == 2 * count and all(cell in free for cell in cells):
+            return sorted(cells)
+
+
 def shuffled_portals(rng, board):
     """Two random portal pairs, mirrored for the two sides: each pair joins two different
     layers off the Ground, in the middle four ranks, away from rocks"""

@@ -322,7 +322,14 @@ answers draw offers itself and a take-back needs no leave). `POST /api/game/join
 `{"side": "white" | "black"}` to sit on that side; the invite links end in `/<side>`. Every
 game answer carries `teams`: `{"turn": "<seat>"}` in a team game, else `null`; online,
 `online.seat` is your own seat, and a move out of turn is refused with "It is your teammate's
-move".
+move". Teammates talk with `POST /api/game/say` `{"text": "...", "move": {"from", "to"}}` (the move
+optional, a suggestion that must be playable in the position now); `online.chat` lists your
+own team's messages, each with the position `version` it was about.
+
+**Hints:** `POST /api/game/hint` answers with the game and `hint`: `{"from", "to", "promotion",
+"version"}`, the computer's choice for the player to move (thinking a second at the strongest
+level), not played. For games on one screen, against the computer, and a team playing the
+computer online; not between people online.
 - Pages keep up by asking `GET /api/game/state?since=<stamp>` once a second; if nothing changed
   the answer is short (`unchanged: true`, the clock and `online`).
 

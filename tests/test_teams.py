@@ -10,7 +10,7 @@ E2E4, E7E5, D2D4, D7D5, G1F3 = (([4, 1, 0], [4, 3, 0]), ([4, 6, 0], [4, 4, 0]), 
                                 ([3, 6, 0], [3, 4, 0]), ([6, 0, 0], [5, 2, 0]))
 
 
-class TestTeams(OnlineTestCase):
+class TeamTestCase(OnlineTestCase):
     def four_players(self):
         """A 2v2 online game, everyone seated. Returns (white, white2, black, black2)."""
         data = self.open(kind="online", side="white", teams=True).get_json()
@@ -23,6 +23,8 @@ class TestTeams(OnlineTestCase):
             seated[joined["online"]["seat"]] = player
         return seated["white"], seated["white2"], seated["black"], seated["black2"]
 
+
+class TestTeams(TeamTestCase):
     def test_four_seats_filled_by_the_side_asked_for(self):
         white, white2, black, black2 = self.four_players()
         state = white2.state()
@@ -91,6 +93,63 @@ class TestTeams(OnlineTestCase):
         self.assertEqual(refused.status_code, 400)
         self.assertEqual(self.open(kind="online", side="black", teams=True,
                                    computer={"color": "black", "level": "easy"}).status_code, 400)
+
+
+class TestTeamTalk(TeamTestCase):
+    def test_teammates_see_their_messages_and_nobody_else(self):
+        white, white2, black, black2 = self.four_players()
+        said = white2.post('/api/game/say', {"text": "  push   the e pawn  "}).get_json()
+        self.assertTrue(said["success"], said.get("error"))
+        mine = white.state()["online"]["chat"]
+        self.assertEqual([(m["seat"], m["text"], m["move"]) for m in mine], [("white2", "push the e pawn", None)])
+        self.assertEqual(black.state()["online"]["chat"], [])
+        self.assertEqual(Player(white.game_id).state()["online"]["chat"], [])   # a watcher
+
+    def test_a_suggested_move_must_be_playable_now(self):
+        white, white2, black, black2 = self.four_players()
+        said = white2.post('/api/game/say', {"move": {"from": [6, 0, 0], "to": [5, 2, 0]}}).get_json()
+        self.assertTrue(said["success"], said.get("error"))
+        message = white.state()["online"]["chat"][-1]
+        self.assertEqual((message["move"], message["version"]), ({"from": [6, 0, 0], "to": [5, 2, 0]}, said["version"]))
+        refused = white2.post('/api/game/say', {"move": {"from": [6, 0, 0], "to": [6, 2, 0]}}).get_json()
+        self.assertEqual(refused["error"], "That move cannot be played now")
+        refused = black.post('/api/game/say', {"move": {"from": [6, 7, 0], "to": [5, 5, 0]}}).get_json()
+        self.assertEqual(refused["error"], "That move cannot be played now")   # not Black's turn
+
+    def test_talk_needs_a_team_game_and_a_seat(self):
+        white, black = self.two_players()
+        self.assertEqual(white.post('/api/game/say', {"text": "hi"}).get_json()["error"], "Only team games have team messages")
+        self.assertEqual(self.open(kind="local", teams=True).status_code, 200)
+        data = self.open(kind="online", teams=True).get_json()
+        self.assertEqual(Player(data["game_id"]).post('/api/game/say', {"text": "hi"}).get_json()["error"],
+                         "You are watching this game")
+
+
+class TestHints(OnlineTestCase):
+    def test_a_hint_suggests_a_legal_move_without_playing_it(self):
+        data = self.open(kind="computer", computer={"color": "black", "level": "easy"}).get_json()
+        player = Player(data["game_id"])
+        answer = player.post('/api/game/hint').get_json()
+        self.assertTrue(answer["success"], answer.get("error"))
+        hint = answer["hint"]
+        self.assertEqual((answer["move_history"], hint["version"]), ([], data["version"]))
+        legal = player.get('/api/game/legal-moves', **{"from": str(hint["from"])}).get_json()["legal_moves"]
+        self.assertIn(hint["to"], legal)
+
+    def test_hints_on_one_screen_and_for_a_team_against_the_computer(self):
+        self.assertTrue(Player(self.open(kind="local").get_json()["game_id"]).post('/api/game/hint').get_json()["success"])
+        data = self.open(kind="online", teams=True, computer={"color": "black", "level": "easy"}).get_json()
+        self.assertTrue(Player(data["game_id"], data["seat"]).post('/api/game/hint').get_json()["success"])
+
+    def test_no_hints_between_people_online(self):
+        white, black = self.two_players()
+        self.assertEqual(white.post('/api/game/hint').get_json()["error"],
+                         "Hints are only for games against the computer or on one screen")
+
+    def test_no_hint_on_the_computers_turn(self):
+        data = self.open(kind="computer", side="black", computer={"color": "white", "level": "easy"}).get_json()
+        answer = Player(data["game_id"]).post('/api/game/hint').get_json()
+        self.assertEqual(answer["error"], "It is the computer's turn")
 
 
 if __name__ == '__main__':

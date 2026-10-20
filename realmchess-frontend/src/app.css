@@ -897,6 +897,17 @@ legend {
   box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.95);
 }
 
+/* A suggested move (a hint, or a teammate's idea): a blue ring where it starts, a blue pad
+   where it goes. After the last-move marks, so it shows on top of them. */
+.map-cell.is-suggested-from {
+  box-shadow: inset 0 0 0 3px var(--suggest);
+}
+
+.map-cell.is-suggested-to {
+  box-shadow: inset 0 0 0 3px var(--suggest);
+  background-image: radial-gradient(circle, rgba(79, 195, 247, 0.55) 0 42%, transparent 44%);
+}
+
 .map-cell.is-selected {
   box-shadow: inset 0 0 0 3px var(--accent);
 }

@@ -14,6 +14,7 @@
   --accent-ink: #1a1405;
   --danger: #ff5a4f;
   --move: #22c7a9;
+  --suggest: #4fc3f7;    /* a suggested move: a hint or a teammate's */
 
   /* Shape rule: panels 16px, cards 14px, controls 10px, chips round */
   --r-panel: 16px;

@@ -21,6 +21,8 @@ IDLE_SECONDS = 24 * 3600      # a room nobody has touched for this long is remov
 MAX_ROOMS = 2000
 CONNECTED_SECONDS = 6         # a player heard from this recently counts as connected
 OFFERS = ("draw", "takeback")
+CHAT_LENGTH = 200             # characters in one team message
+CHAT_KEPT = 40                # messages kept per game
 
 
 class Room:
@@ -34,6 +36,10 @@ class Room:
         self.revision = 0        # goes up when the seats or the offer change
         self.permanent = False
         self.teams = False       # two players a side, taking turns with the army
+        # Team games online: what teammates said to each other, oldest first. Each is
+        # {"id", "seat", "text", "move": {"from", "to"} or None, "version": the position it was about}
+        self.chat = []
+        self._said = 0
         self._now = now
         self.touched = now()
 
@@ -164,6 +170,33 @@ class Room:
             self.offer = None
             self.revision += 1
 
+    # ==================== TEAMMATES TALKING ====================
+
+    def say(self, seat, text, move=None):
+        """A message to your teammate, maybe with a move you suggest for the position now.
+        Only your own team sees it."""
+        with self.manager.lock:
+            if not self.teams:
+                raise ValueError("Only team games have team messages")
+            if seat is None:
+                raise ValueError("You are watching this game")
+            text = " ".join(str(text or "").split())[:CHAT_LENGTH]
+            if move is not None:
+                game = self.manager.game
+                from_coord, to_coord = tuple(move["from"]), tuple(move["to"])
+                piece = game.board.get_piece(from_coord)
+                if (piece is None or getattr(piece, "color", None) != seat[:5] or
+                        game.current_player != seat[:5] or to_coord not in game.get_legal_moves(from_coord)):
+                    raise ValueError("That move cannot be played now")
+                move = {"from": from_coord, "to": to_coord}
+            if not text and move is None:
+                raise ValueError("Say something, or suggest a move")
+            self._said += 1
+            self.chat.append({"id": self._said, "seat": seat, "text": text, "move": move,
+                              "version": self.manager._version})
+            del self.chat[:-CHAT_KEPT]
+            self.revision += 1
+
     # ==================== WHAT THE PAGE NEEDS TO KNOW ====================
 
     def stamp(self):
@@ -181,6 +214,8 @@ class Room:
             "connected": {each: each in self.seats and now - self.last_seen.get(each, -1e9) <= CONNECTED_SECONDS
                           for each in seats},
             "offer": dict(self.offer) if self.offer is not None else None,
+            # Your own team's messages (nobody else's: watchers see none)
+            "chat": [dict(message) for message in self.chat if seat and message["seat"][:5] == seat[:5]],
         }
 
 

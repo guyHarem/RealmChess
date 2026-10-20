@@ -253,17 +253,20 @@ function Ring({ position, color }) {
   )
 }
 
-// The cell a lesson asks you to reach: a glowing amber pad on its floor
-function GoalPad({ position }) {
+const SUGGESTION = '#4FC3F7' // a suggested move: from a hint, or from a teammate
+
+// The cell a lesson asks you to reach: a glowing amber pad on its floor (a suggested move's
+// destination uses it in blue)
+function GoalPad({ position, color = '#F5B83D' }) {
   return (
     <group position={[position[0], position[1] + 0.02, position[2]]} rotation={FLAT}>
       <mesh>
         <circleGeometry args={[0.42, 48]} />
-        <meshBasicMaterial color="#F5B83D" transparent opacity={0.4} depthWrite={false} toneMapped={false} />
+        <meshBasicMaterial color={color} transparent opacity={0.4} depthWrite={false} toneMapped={false} />
       </mesh>
       <mesh>
         <torusGeometry args={[0.44, 0.045, 10, 48]} />
-        <meshBasicMaterial color="#F5B83D" toneMapped={false} />
+        <meshBasicMaterial color={color} toneMapped={false} />
       </mesh>
     </group>
   )
@@ -390,6 +393,7 @@ function Scene({
   goal,
   lastMove,
   check,
+  suggestion,
   showMoveBalls,
   spread,
   solo,
@@ -480,6 +484,8 @@ function Scene({
       {lastMove && visible(lastMove.from[2]) && <MovePad position={cellPosition(lastMove.from)} />}
       {lastMove && visible(lastMove.to[2]) && <MovePad position={cellPosition(lastMove.to)} arrived />}
       {goal && visible(goal[2]) && <GoalPad position={cellPosition(goal)} />}
+      {suggestion && visible(suggestion.from[2]) && <Ring position={cellPosition(suggestion.from)} color={SUGGESTION} />}
+      {suggestion && visible(suggestion.to[2]) && <GoalPad position={cellPosition(suggestion.to)} color={SUGGESTION} />}
       {selected && visible(selected[2]) && <Ring position={cellPosition(selected)} color="#F5B83D" />}
       {moves.map((move) =>
         board[keyOf(move)] ? (
@@ -510,6 +516,7 @@ export default function CubeBoard({
   goal = null,
   lastMove = null, // { from, to, index (in the move history), captured: { type, color } or null }
   check = null, // the cell of a king in check
+  suggestion = null, // { from, to }: a move suggested by a hint or a teammate
   showMoveBalls = true,
   spread = false,
   solo = false,
@@ -535,6 +542,7 @@ export default function CubeBoard({
         goal={goal}
         lastMove={lastMove}
         check={check}
+        suggestion={suggestion}
         showMoveBalls={showMoveBalls}
         spread={spread}
         solo={solo}

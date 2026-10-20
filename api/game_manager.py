@@ -319,6 +319,36 @@ class GameManager:
                     response["busy"] = True   # not a fault: the page asks again shortly
                 return response
 
+    HINT_SECONDS = 1.0   # a hint thinks this long at the strongest level, whatever the game's level
+
+    def hint(self):
+        """The computer's suggestion for the player to move, without playing it. The answer is
+        the game state plus "hint": {"from", "to", "promotion", "version"}; version is the
+        position it is for, since the game may move on while it thinks."""
+        try:
+            with self.lock:
+                self._require_ongoing()
+                if self.game.pending_promotion is not None:
+                    raise ValueError("Finish the promotion first")
+                if self._computer_to_move():
+                    raise ValueError("It is the computer's turn")
+                version = self._version
+                position = copy.deepcopy(self.game)
+            thought = self._think(position, "hard", self.HINT_SECONDS)
+            with self.lock:
+                if thought is None:
+                    raise ValueError("There is no legal move")
+                response = self._state_response()
+                response["hint"] = {"from": thought["from"], "to": thought["to"],
+                                    "promotion": thought["promotion"], "version": version}
+                return response
+        except ValueError as e:
+            with self.lock:
+                response = self._error_response(e)
+                if isinstance(e, Busy):
+                    response["busy"] = True
+                return response
+
     # ==================== ENDING THE GAME BY CHOICE ====================
 
     @locked

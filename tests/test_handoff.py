@@ -61,8 +61,12 @@ class TestReplay(unittest.TestCase):
         room.teams = True
         keys = {seat: room.sit(seat) for seat in ("white", "black", "white2", "black2")}
         play(room.manager, ((4, 1, 0), (4, 3, 0)), ((4, 6, 0), (4, 4, 0)))
+        room.say("white", "knight out?", {"from": [6, 0, 0], "to": [5, 2, 0]})
         copy = self.travel(room)
         self.assertTrue(copy.teams)
+        message = copy.chat[-1]
+        self.assertEqual((message["text"], message["move"]["to"], message["version"]),
+                         ("knight out?", (5, 2, 0), copy.manager._version))   # still about the position now
         self.assertEqual({seat: copy.seat_of(key) for seat, key in keys.items()}, {seat: seat for seat in keys})
         self.assertEqual(copy.turn_seat(), "white2")
 

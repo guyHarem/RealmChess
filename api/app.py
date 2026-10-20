@@ -303,6 +303,46 @@ def computer_move():
         limits["thinking"].give_back(who)
 
 
+@app.route('/api/game/say', methods=['POST'])
+def say():
+    """Online team games: {"text": "...", "move": {"from": [x,y,z], "to": [x,y,z]} (optional)}
+    to your teammate. A move is a suggestion for the position now; it is not played."""
+    if not online():
+        return refuse("Only online team games have team messages")
+    data = request.get_json(silent=True) or {}
+    move = data.get("move")
+    try:
+        if move is not None:
+            if not isinstance(move, dict):
+                raise ValueError('move must be {"from": [x, y, z], "to": [x, y, z]}')
+            move = {"from": parse_coord(move.get("from")), "to": parse_coord(move.get("to"))}
+        g.room.say(g.seat, data.get("text", ""), move)
+    except ValueError as e:
+        return refuse(str(e))
+    return reply(g.manager.get_state())
+
+
+@app.route('/api/game/hint', methods=['POST'])
+def hint():
+    """The computer suggests a move for the player to move, without playing it. Not between
+    people online (that would be help from outside the game); a team playing the computer may."""
+    if online() and g.manager.computer is None:
+        return refuse("Hints are only for games against the computer or on one screen")
+    if online() and g.color is None:
+        return refuse("You are watching this game", 403)
+    if g.room.kind == "practice":
+        return refuse("The lessons and puzzles have their own help")
+    if not hosted():
+        return reply(g.manager.hint())
+    who = visitor()
+    if not limits["computer_moves"].allow(who) or not limits["thinking"].take(who):
+        return too_many()
+    try:
+        return reply(g.manager.hint())
+    finally:
+        limits["thinking"].give_back(who)
+
+
 # ==================== SPECIAL MOVES ====================
 
 @app.route('/api/game/promote', methods=['POST'])

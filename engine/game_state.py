@@ -87,7 +87,7 @@ class GameState:
             self.current_player = white
     
     def add_to_move_history(self, from_coord, to_coord, moving_piece=None, captured_piece=None, promotion_piece=None,
-                            special_move=None):
+                            special_move=None, via=None):
         move_dict = {
             'from': from_coord,
             'to': to_coord,
@@ -96,6 +96,8 @@ class GameState:
             'promotion_piece': str(promotion_piece) if promotion_piece is not None else None,
             'special_move': special_move
         }
+        if via is not None:
+            move_dict['via'] = via   # the portal the piece went through
         
         self.move_history.append(move_dict)
 
@@ -175,9 +177,11 @@ class GameState:
         
         # Capture piece info before executing move
         captured_piece = self.board.get_piece(to_coord)
+        via = self._legal_routes(from_coord).get(to_coord) if self.board.portals else None
         
         # Record history (before has_moved changes, so undo can restore it)
-        self.add_to_move_history(from_coord, to_coord, moving_piece=piece, captured_piece=captured_piece)
+        self.add_to_move_history(from_coord, to_coord, moving_piece=piece, captured_piece=captured_piece,
+                                 special_move="portal" if via else None, via=via)
         self.add_to_undo_stack(from_coord, to_coord, piece, captured_piece=captured_piece, captured_coord=to_coord)
         
         # Execute the move
@@ -279,17 +283,22 @@ class GameState:
         dir_vector = (sign(dx), sign(dy), sign(dz))
         distance = max(abs(dx), abs(dy), abs(dz))
         
-        # Walk intermediate squares and check for blocking pieces (or rocks)
+        # Walk intermediate squares and check for blocking pieces, rocks and empty portals
         current = from_coord
         for step in range(1, distance):
             current = GameState.coord_sum(current, dir_vector)
-            if self.board.get_piece(current) is not None:
+            if self.board.get_piece(current) is not None or current in self.board.portals:
                 return False  # path blocked
         
         return True  # path is clear
     
     def can_piece_attack_square(self, piece, from_coord, to_coord):
-        """Check if a piece can attack a square (with path blocking)"""
+        """Check if a piece can attack a square (with path blocking), directly or through a portal"""
+        if self._attacks_directly(piece, from_coord, to_coord):
+            return True
+        return any(self._attacks_directly(piece, from_coord, portal) for portal in self._portals_into(to_coord))
+
+    def _attacks_directly(self, piece, from_coord, to_coord):
         # Get possible attack moves
         if isinstance(piece, Pawn):
             possible_moves = piece.get_possible_moves(from_coord, self.board.bounds)[1]  # captures only
@@ -373,75 +382,78 @@ class GameState:
         return is_safe
     
     
-    def get_legal_moves(self, from_coord):
-        """Get all legal moves for a piece at given coordinate"""
-        legal_moves = []
+    # ==================== PORTALS ====================
+    # A piece that ends its move on an empty portal comes out on the other cell of its pair:
+    # an empty cell, or an enemy piece there is captured, never on its own piece. A piece
+    # standing on a portal plugs it (moving there just captures it). Sliding pieces cannot pass
+    # over an empty portal. Attacks go through portals the same way, so they can give check.
+
+    def _landing(self, coord):
+        """Where a move that ends on coord really lands, and the portal it went through (or None)"""
+        twin = self.board.portals.get(coord)
+        if twin is not None and self.board.get_piece(coord) is None:
+            return twin, coord
+        return coord, None
+
+    def _portals_into(self, coord):
+        """The empty portals that lead to coord"""
+        twin = self.board.portals.get(coord)
+        return [twin] if twin is not None and self.board.get_piece(twin) is None else []
+
+    def _legal_routes(self, from_coord):
+        """Every ordinary legal move of the piece (not castling or en passant): {landing: the
+        portal it goes through, or None when it can get there without one}"""
+        routes = {}
         piece = self.board.get_piece(from_coord)
-        
+        if piece is None or isinstance(piece, Rock):
+            return routes
+
+        def offer(target, needs):
+            """needs: 'empty', 'enemy' or 'either' (what the landing cell must hold)"""
+            landing, via = self._landing(target)
+            if landing == from_coord:
+                return
+            occupant = self.board.get_piece(landing)
+            if isinstance(occupant, Rock):
+                return
+            if occupant is not None and occupant.color == piece.color:
+                return
+            if (needs == 'empty' and occupant is not None) or (needs == 'enemy' and occupant is None):
+                return
+            if landing in routes and routes[landing] is None:
+                return
+            if self.simulate_move(piece, from_coord, landing):
+                if landing not in routes or via is None:
+                    routes[landing] = via
+
+        if isinstance(piece, Pawn):
+            steps, captures = piece.get_possible_moves(from_coord, self.board.bounds)
+            for target in steps:
+                # A double step can't jump over a piece, a rock or an empty portal
+                if self.is_path_clear(from_coord, target):
+                    offer(target, 'empty')
+            for target in captures:
+                offer(target, 'enemy')
+        else:
+            can_jump = isinstance(piece, (Knight, King))  # King only moves 1 step
+            for target in piece.get_possible_moves(from_coord, self.board.bounds):
+                if can_jump or self.is_path_clear(from_coord, target):
+                    offer(target, 'either')
+            # The king may also capture (but not step) one square away diagonally between layers
+            if isinstance(piece, King):
+                for target in piece.get_capture_only_moves(from_coord, self.board.bounds):
+                    offer(target, 'enemy')
+        return routes
+
+    def get_legal_moves(self, from_coord):
+        """Get all legal moves for a piece at given coordinate (where each lands)"""
+        piece = self.board.get_piece(from_coord)
+
         # Check if no piece in the square or if it's a rock -> return empty list
         if piece is None or isinstance(piece, Rock):
-            return legal_moves
-        
-        # Pawn has different logic than other pieces
-        if isinstance(piece, Pawn):
-            possible_moves, possible_captures = piece.get_possible_moves(from_coord, self.board.bounds)
-            
-            # Process Pawn moves: must be empty squares
-            for possible_move in possible_moves:
-                if self.board.get_piece(possible_move) is not None:
-                    continue  # Skip, not empty
-                
-                if not self.is_path_clear(from_coord, possible_move):
-                    continue  # Skip, double-step can't jump over a piece or rock
-                
-                if self.simulate_move(piece, from_coord, possible_move):
-                    legal_moves.append(possible_move)
-            
-            # Process Pawn captures: must be enemy pieces
-            for possible_capture in possible_captures:
-                destination_piece = self.board.get_piece(possible_capture)
-                
-                if destination_piece is None or isinstance(destination_piece, Rock):
-                    continue  # Skip, empty square or rock
-                if destination_piece.color == piece.color:
-                    continue  # Skip, own piece
-                
-                if self.simulate_move(piece, from_coord, possible_capture):
-                    legal_moves.append(possible_capture)
-        
-        # Non-Pawn pieces
-        else:
-            possible_moves = piece.get_possible_moves(from_coord, self.board.bounds)
-            can_jump = isinstance(piece, (Knight, King))  # King only moves 1 step
-            
-            for possible_move in possible_moves:
-                destination_piece = self.board.get_piece(possible_move)
-                
-                # Skip if rock (rocks can't be captured)
-                if isinstance(destination_piece, Rock):
-                    continue
-                
-                # Skip if own piece
-                if destination_piece is not None and destination_piece.color == piece.color:
-                    continue
-                
-                # Skip if a piece or rock is in the way
-                if not can_jump and not self.is_path_clear(from_coord, possible_move):
-                    continue
-                
-                if self.simulate_move(piece, from_coord, possible_move):
-                    legal_moves.append(possible_move)
-        
-        # The king may also capture (but not step) one square away diagonally between layers
-        if isinstance(piece, King):
-            for possible_capture in piece.get_capture_only_moves(from_coord, self.board.bounds):
-                destination_piece = self.board.get_piece(possible_capture)
-                if destination_piece is None or isinstance(destination_piece, Rock):
-                    continue
-                if destination_piece.color == piece.color:
-                    continue
-                if self.simulate_move(piece, from_coord, possible_capture):
-                    legal_moves.append(possible_capture)
+            return []
+
+        legal_moves = list(self._legal_routes(from_coord))
         
         # Add castling destinations if piece is King
         if isinstance(piece, King):
@@ -464,6 +476,11 @@ class GameState:
         origins = []
         for coord, other in self.find_piece_by_type(type(piece), piece.color):
             if coord == from_coord:
+                continue
+            if self.board.portals:
+                # Through a portal any piece may land anywhere: test every one in full
+                if to_coord in self.get_legal_moves(coord):
+                    origins.append(coord)
                 continue
             # Cheap check on the piece's shape of movement before the full legality test
             reachable = other.get_possible_moves(coord, self.board.bounds)
@@ -583,7 +600,7 @@ class GameState:
                 path_clear = True
                 for x in range(king_coord[X] + direction, rook_coord[X], direction):
                     check_coord = (x, king_coord[Y], king_coord[Z])
-                    if self.board.get_piece(check_coord) is not None:
+                    if self.board.get_piece(check_coord) is not None or check_coord in self.board.portals:
                         path_clear = False
                         break
                 

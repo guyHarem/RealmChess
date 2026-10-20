@@ -13,12 +13,36 @@ class Board:
         self.z_max = z_max
         self.bounds = (size, z_min, z_max)
         self.board = dict()
+        # Portals: each portal cell -> the other cell of its pair (see set_portals)
+        self.portals = {}
         # Only the full board has a starting position and rock layout;
         # smaller boards (lessons, scenarios) start empty and are filled in
         if self.is_standard():
             self.init_pieces()
             self.init_rocks()
     
+    def set_portals(self, pairs):
+        """Link pairs of cells as portals: [((x,y,z), (x,y,z)), ...]. A piece ending its move on
+        an empty portal comes out on the other cell of the pair (see GameState). Portal cells
+        must be inside the board, distinct, and free of rocks."""
+        portals = {}
+        for pair in pairs:
+            a, b = (tuple(cell) for cell in pair)
+            for cell in (a, b):
+                self.is_valid_coordinate(cell)
+                if cell in portals:
+                    raise ValueError("A cell can be one portal only")
+                if type(self.board.get(cell)).__name__ == "Rock":
+                    raise ValueError("A portal cannot be on a rock")
+            if a == b:
+                raise ValueError("A portal pair needs two different cells")
+            portals[a], portals[b] = b, a
+        self.portals = portals
+
+    def portal_pairs(self):
+        """The portal pairs, each once, in a stable order"""
+        return sorted({tuple(sorted((a, b))) for a, b in self.portals.items()})
+
     def is_standard(self):
         return self.bounds == (8, -2, 2)
                         

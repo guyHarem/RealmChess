@@ -58,6 +58,8 @@ def move_history_to_json(move_history):
             json_move['from'] = coord_to_list(json_move['from'])
         if 'to' in json_move and isinstance(json_move['to'], tuple):
             json_move['to'] = coord_to_list(json_move['to'])
+        if 'via' in json_move and isinstance(json_move['via'], tuple):
+            json_move['via'] = coord_to_list(json_move['via'])
         json_history.append(json_move)
     return json_history
 

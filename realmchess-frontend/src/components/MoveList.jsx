@@ -1,6 +1,6 @@
 // Score sheet: one row per turn, White then Black. Moves off the Ground carry a layer mark.
 import { useEffect, useRef } from 'react'
-import { LAYERS, PORTAL_MARK, layerOf, scoreSheet } from '../lib/chess.js'
+import { BLAST_MARK, LAYERS, PORTAL_MARK, layerOf, scoreSheet } from '../lib/chess.js'
 
 const portalMark = <span className="moves-portal">{PORTAL_MARK}</span>
 
@@ -11,12 +11,13 @@ function Move({ move }) {
     <span>
       {after === undefined ? move.text : <>{before}{portalMark}{after}</>}
       {move.mark && <span style={{ color: layerOf(move.z).light }}>{move.mark}</span>}
+      {move.blast && <span className="moves-blast">{BLAST_MARK}</span>}
       {move.suffix}
     </span>
   )
 }
 
-export default function MoveList({ history, currentPlayer, finished, portals = false }) {
+export default function MoveList({ history, currentPlayer, finished, portals = false, dynamite = false }) {
   const rows = scoreSheet(history)
   const box = useRef(null)
 
@@ -38,6 +39,11 @@ export default function MoveList({ history, currentPlayer, finished, portals = f
           </span>
         ))}
         {portals && <span>{portalMark} portal</span>}
+        {dynamite && (
+          <span>
+            <span className="moves-blast">{BLAST_MARK}</span> blast
+          </span>
+        )}
       </div>
       <div className="moves-box" ref={box}>
         <div className="moves-row moves-head">

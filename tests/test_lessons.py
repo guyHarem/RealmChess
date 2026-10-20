@@ -33,7 +33,7 @@ class TestLessons(unittest.TestCase):
         portals = [[list(a), list(b)] for a, b in step.get("portals", [])] or None
         response = manager.setup_position(pieces, "white", rocks=False,
                                           size=board["size"], z_min=board["z_min"], z_max=board["z_max"],
-                                          portals=portals)
+                                          portals=portals, dynamite=step.get("dynamite"))
         self.assertTrue(response["success"], response.get("error"))
         return manager
 
@@ -64,6 +64,8 @@ class TestLessons(unittest.TestCase):
                 elif step["expect"] == "capture":
                     self.assertIsNotNone(target)
                     self.assertEqual(target.color, "black")
+                elif step["expect"] == "blast":
+                    self.assertEqual(manager.game.move_history[-1]["special_move"], "explosion")
                 elif step["expect"] == "checkmate":
                     self.assertEqual(response["status"], "checkmate")
                     self.assertEqual(response["winner"], "white")

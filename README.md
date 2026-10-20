@@ -27,7 +27,7 @@ It was called CubeChess until October 2026. Play it at [realmchess.com](https://
 - ✅ Home page, game setup and the game screen (local two-player)
 - ✅ Three.js 3D board: cube-shaped cells, 3D pieces, layer tools, camera controls
 - ✅ Move list, captured material, chess clock with increment, undo, resign and draw by agreement
-- ✅ Lesson player: eleven lessons on a 5×5 board (three layers; the edge-pawn lesson has all five), including portals (`realmchess-frontend/src/lessons.json`)
+- ✅ Lesson player: twelve lessons on a 5×5 board (three layers; the edge-pawn lesson has all five), including portals and dynamite (`realmchess-frontend/src/lessons.json`)
 - ✅ Scenario player: 32 checkmate puzzles in four tiers (`realmchess-frontend/src/scenarios.json`)
 - ✅ Play against the computer (easy, medium, hard), with the last move marked on the board
 - ✅ Online play with a link: seats without accounts, draw and take-back offers, watching
@@ -79,6 +79,14 @@ comes out on the other cell of its pair, capturing an enemy there; it may not la
 piece. A piece standing on a portal plugs it: moving there just captures it. Sliding pieces and
 double steps cannot pass over an empty portal. Attacks go through portals the same way, so a
 portal can give check. Notation marks a trip with ⊙ (`R⊙h5↓2`).
+
+**Dynamite (optional):** charges on cells, switched on at setup: **Classic** (Sky d3 and Dungeon
+e3, mirrored to Sky d6 and Dungeon e6) or **Shuffle** (two random charges, mirrored). A piece
+that ends its move on dynamite sets it off: every piece in the 3×3×3 cube around it (its own
+layer and the ones above and below) is removed, the mover too, but kings survive. Rocks there
+are destroyed and other dynamite there goes off as well; the board stays whole. Passing over
+dynamite does nothing, and a pawn can step onto it but not capture onto it. A move whose blast
+would leave your king in check is not allowed. Notation marks a blast with ✸ (`Rc3✸`).
 
 **Square colors:** the checkered pattern shifts by one square on every other layer, so a bishop
 keeps its color when it changes layer. The top-down view shows chess coordinates (a-h, 1-8).
@@ -254,7 +262,7 @@ The test bench edits positions through sandbox endpoints that are for testing on
 | `/api/game/join` | POST | Online: take a free seat (optional `{"side"}`), or watch |
 | `/api/game/offer` | POST | Online: offer a draw or ask to take a move back |
 | `/api/game/answer` | POST | Online: accept, decline or withdraw the offer |
-| `/api/game/new` | POST | Start a new game in the same room. Optional body: `{"rocks": true, "move_limit": 50, "clock": {"initial": 600, "increment": 5}, "computer": {"color": "black", "level": "hard"}, "portals": "classic"}`. portals: `"classic"`, `"shuffle"` or the pairs `[[[x,y,z],[x,y,z]], ...]`; every game answer lists them as `portals` |
+| `/api/game/new` | POST | Start a new game in the same room. Optional body: `{"rocks": true, "move_limit": 50, "clock": {"initial": 600, "increment": 5}, "computer": {"color": "black", "level": "hard"}, "portals": "classic", "dynamite": "shuffle"}`. portals: `"classic"`, `"shuffle"` or the pairs `[[[x,y,z],[x,y,z]], ...]`; dynamite: `"classic"`, `"shuffle"` or the cells; every game answer lists them as `portals` and `dynamite` (the charges left), and a blast's history entry has `blast` (what it removed) and `charges` |
 | `/api/game/state` | GET | Get current board state |
 | `/api/game/move` | POST | Execute a move |
 | `/api/game/legal-moves` | GET | Get legal moves for piece: the cells it lands on, and `portal_entries`, the portals it can step into |
@@ -424,12 +432,10 @@ This project is built with a learning-first approach:
 
 ## Next Steps
 
-1. More special cells, each a setup option like portals:
-   - **Dynamite**: a piece that steps on it explodes, removing every piece in the 3×3×3 cube
-     around it (itself too); kings survive, rocks are destroyed, the board stays whole
+1. More special cells, each a setup option like portals and dynamite:
    - **Clouds** (Space and the Sky only): visible shelter; a piece inside cannot be captured,
      but cannot capture or give check either; kings cannot enter; sliders cannot pass through
-2. Then tune every layout together with self-play (the classic portals are a stand-in): no trip
+2. Then tune every layout together with self-play (the classic portals and dynamite are stand-ins): no trip
    or blast on the first move, and special cells that come into play within a few moves
 3. Get real players: share the link, try 2 against 2, and see what confuses newcomers
 4. Later, once people play: accounts, ratings and finding an opponent; games that survive a

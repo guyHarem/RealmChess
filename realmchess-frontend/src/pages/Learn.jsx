@@ -33,6 +33,7 @@ export default function Learn() {
   const lastLesson = lessonIndex === LESSONS.length - 1
   const lessonBoard = boardOf(lesson)
   const portals = game?.portals ?? []
+  const dynamite = game?.dynamite ?? []
   const shownMoves = [...legalMoves, ...portalEntries]
   const lessonLayers = layersOf(lessonBoard)
   const showing = game?.board_size
@@ -46,7 +47,7 @@ export default function Learn() {
       setRevealed(false)
       setNudge(null)
       setActiveLayer(which.layer)
-      setup({ ...size, rocks: false, current_player: 'white', pieces: which.pieces, portals: which.portals })
+      setup({ ...size, rocks: false, current_player: 'white', pieces: which.pieces, portals: which.portals, dynamite: which.dynamite })
     },
     // setup is recreated every render but always talks to the same practice game
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -190,6 +191,7 @@ export default function Learn() {
                   selected={selected}
                   legalMoves={shownMoves}
                   portals={portals}
+                  dynamite={dynamite}
                   goal={showGoal ? step.to : null}
                   onCellClick={onCellClick}
                 />
@@ -206,6 +208,7 @@ export default function Learn() {
                 selected={selected}
                 legalMoves={shownMoves}
                 portals={portals}
+                dynamite={dynamite}
                 goal={showGoal ? step.to : null}
                 onCellClick={onCellClick}
               />

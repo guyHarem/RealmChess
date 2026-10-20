@@ -992,6 +992,18 @@ legend {
   font: 500 12px var(--mono);
 }
 
+.moves-blast,
+.map-dynamite {
+  color: #ff6b3d;
+}
+
+.map-dynamite {
+  position: absolute;
+  font-size: 22px;
+  line-height: 1;
+  pointer-events: none;
+}
+
 .moves-portal {
   color: #f472b6;
 }

@@ -8,6 +8,7 @@ export const DEFAULT_SETTINGS = {
   side: 'white', // which colour sits nearest the camera; against the computer, the side you play
   rocks: true,
   portals: 'off', // 'off', 'classic' (the designed layout) or 'shuffle' (random, mirrored)
+  dynamite: 'off', // the same three choices
   showLegalMoves: true,
   allowUndo: true,
   sound: true,
@@ -40,14 +41,15 @@ export function computerRequest(settings, side = settings.side) {
   return { color: side === 'white' ? 'black' : 'white', level: settings.level }
 }
 
-export const PORTAL_CHOICES = [
+export const PORTAL_CHOICES = [ // also the dynamite choices
   { id: 'off', label: 'Off' },
   { id: 'classic', label: 'Classic' },
   { id: 'shuffle', label: 'Shuffle' },
 ]
 
-// The portal part of a "new game" request
+// The portal and dynamite parts of a "new game" request
 export const portalRequest = (settings) => (settings.portals === 'off' ? undefined : settings.portals)
+export const dynamiteRequest = (settings) => (settings.dynamite === 'off' ? undefined : settings.dynamite)
 
 // The clock part of a "new game" request: null for no clock, else seconds
 export function clockRequest(clock) {

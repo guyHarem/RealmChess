@@ -46,6 +46,11 @@ export function capturedBy(history) {
     const victim = parsePiece(move.captured_piece)
     const mover = parsePiece(move.moving_piece)
     if (victim && mover) taken[mover.color].push(victim.type)
+    // A blast takes pieces of both sides (the mover's own too): each counts for its opponent
+    for (const [, text] of move.blast ?? []) {
+      const lost = parsePiece(text)
+      if (lost.color) taken[otherColor(lost.color)].push(lost.type)
+    }
   }
   for (const list of Object.values(taken)) list.sort((a, b) => PIECE_VALUES[b] - PIECE_VALUES[a])
   return taken
@@ -91,6 +96,7 @@ function originOf(entry, piece, takes) {
 }
 
 export const PORTAL_MARK = '⊙' // in move notation: the piece went through a portal
+export const BLAST_MARK = '✸' // ... and after the square: it set off dynamite
 
 // Move history → score-sheet rows: [{ number, white: move, black: move }]
 // A move is { text, mark, z, suffix }: standard chess notation, then the layer mark
@@ -120,7 +126,7 @@ export function scoreSheet(history) {
       text = `${LETTERS[piece.type]}${originOf(entry, piece, takes)}${takes}${through}${squareName(entry.to)}`
     }
     const z = entry.to[2]
-    moves.push({ color: piece.color, text, z, mark: layerOf(z)?.mark ?? '', suffix })
+    moves.push({ color: piece.color, text, z, mark: layerOf(z)?.mark ?? '', blast: !!entry.blast, suffix })
   }
 
   const rows = []
@@ -200,6 +206,8 @@ export function portalCells(portals) {
   })
   return cells
 }
+
+export const CLASSIC_DYNAMITE = [[3, 2, 1], [4, 2, -1], [3, 5, 1], [4, 5, -1]]
 
 // The classic layout, for the setup page's picture (the server holds the real one)
 export const CLASSIC_PORTALS = [

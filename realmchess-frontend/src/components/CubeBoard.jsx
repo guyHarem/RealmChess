@@ -6,7 +6,7 @@ import { OrbitControls } from '@react-three/drei'
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import { PORTAL_COLORS, boardItems, isDarkSquare, keyOf, layerOf, sameCoord } from '../lib/chess.js'
-import { createMoveBall, createPiece, createRock } from '../pieces3d.js'
+import { createDynamite, createMoveBall, createPiece, createRock } from '../pieces3d.js'
 
 const FLAT = [-Math.PI / 2, 0, 0]
 const SPREAD_GAP = 1.15 // extra space between layers when they are spread apart
@@ -185,11 +185,13 @@ function Model({ build, position, rank, onClick, from }) {
   return <primitive object={object} userData-rank={rank} onClick={onClick} />
 }
 
-// A captured piece, shrinking and fading where it stood while the attacker arrives. It is
-// drawn from a fresh copy of the piece, so fading it touches no other piece's material.
-function Ghost({ type, color, position }) {
+// A piece that is about to vanish, drawn from a fresh copy so fading it touches no other
+// piece's material: a captured piece (it waits for the attacker), a piece caught in a blast
+// (it waits for the mover to arrive), or the mover itself blown up (it glides in from `from`
+// first). `hold`: how long it waits before fading.
+function Ghost({ type, color, position, from = null, hold = FADE_MS * 0.45 }) {
   const object = useMemo(() => {
-    const piece = createPiece(type, color)
+    const piece = type === 'Rock' ? createRock() : createPiece(type, color)
     piece.traverse((node) => {
       if (node.material) Object.assign(node.material, { transparent: true, depthWrite: false })
     })
@@ -197,6 +199,7 @@ function Ghost({ type, color, position }) {
   }, [type, color])
   const started = useRef(null)
   const gone = useRef(false)
+  const [x, y, z] = position
 
   useEffect(
     () => () =>
@@ -209,19 +212,55 @@ function Ghost({ type, color, position }) {
   useFrame(() => {
     if (gone.current) return
     started.current ??= performance.now()
-    const t = Math.min(1, (performance.now() - started.current) / FADE_MS)
-    const fade = t < 0.45 ? 0 : (t - 0.45) / 0.55 // stand still until the attacker is nearly there
+    const elapsed = performance.now() - started.current
+    if (from) {
+      const t = Math.min(1, elapsed / GLIDE_MS)
+      const eased = 1 - (1 - t) ** 3
+      object.position.set(from[0] + (x - from[0]) * eased, from[1] + (y - from[1]) * eased + Math.sin(Math.PI * t) * 0.45,
+        from[2] + (z - from[2]) * eased)
+    }
+    const fade = Math.min(1, Math.max(0, (elapsed - hold) / (FADE_MS * 0.6)))
     object.scale.setScalar(1 - 0.75 * fade)
     object.traverse((node) => {
       if (node.material) node.material.opacity = 1 - fade
     })
-    if (t === 1) {
+    if (fade === 1) {
       object.scale.setScalar(0)
       gone.current = true
     }
   })
 
-  return <primitive object={object} position={position} raycast={() => null} />
+  return <primitive object={object} position={from ?? position} raycast={() => null} />
+}
+
+// A blast: an orange ball of light that swells over the 3x3x3 cube and fades, once the mover
+// has arrived
+function Flash({ position }) {
+  const ball = useRef(null)
+  const started = useRef(null)
+  useFrame(() => {
+    const mesh = ball.current
+    if (!mesh || mesh.userData.done) return
+    started.current ??= performance.now()
+    const t = (performance.now() - started.current - GLIDE_MS) / 520
+    if (t < 0) return
+    const done = t >= 1
+    mesh.visible = !done
+    mesh.userData.done = done
+    mesh.scale.setScalar(0.3 + 1.5 * Math.min(1, t) ** 0.6)
+    mesh.material.opacity = 0.85 * (1 - Math.min(1, t))
+  })
+  return (
+    <mesh ref={ball} position={[position[0], position[1] + 0.5, position[2]]} visible={false} raycast={NO_HITS}>
+      <sphereGeometry args={[1, 32, 20]} />
+      <meshBasicMaterial color="#ff8a3d" transparent opacity={0} depthWrite={false} toneMapped={false} />
+    </mesh>
+  )
+}
+
+function Dynamite({ position }) {
+  const object = useMemo(() => createDynamite(), [])
+  return <primitive object={object} position={position} raycast={NO_HITS} />
 }
 
 const NO_HITS = () => null // decorations never take a click: it goes to the cell or piece
@@ -416,6 +455,7 @@ function Scene({
   lastMove,
   glides,
   portals,
+  dynamite,
   check,
   suggestion,
   showMoveBalls,
@@ -509,6 +549,29 @@ function Scene({
         />
       )}
       {check && visible(check[2]) && <CheckPulse position={cellPosition(check)} />}
+      {dynamite.filter((cell) => visible(cell[2])).map((cell) => (
+        <Dynamite key={`dynamite-${keyOf(cell)}`} position={cellPosition(cell)} />
+      ))}
+      {interactive && lastMove?.blast && (
+        <>
+          {lastMove.blast.filter((item) => visible(item.coord[2])).map((item) => {
+            const mover = sameCoord(item.coord, lastMove.to)
+            return (
+              <Ghost
+                key={`blast-${lastMove.index}-${keyOf(item.coord)}`}
+                type={item.type}
+                color={item.color}
+                position={cellPosition(item.coord)}
+                from={mover && visible(lastMove.from[2]) ? cellPosition(lastMove.from) : null}
+                hold={GLIDE_MS}
+              />
+            )
+          })}
+          {lastMove.charges.filter((cell) => visible(cell[2])).map((cell) => (
+            <Flash key={`flash-${lastMove.index}-${keyOf(cell)}`} position={cellPosition(cell)} />
+          ))}
+        </>
+      )}
       {portals.flatMap((pair, index) =>
         pair.filter((cell) => visible(cell[2])).map((cell) => (
           <Portal key={keyOf(cell)} position={cellPosition(cell)} color={PORTAL_COLORS[index % PORTAL_COLORS.length]} />
@@ -550,6 +613,7 @@ export default function CubeBoard({
   lastMove = null, // { from, to, index (in the move history), captured: { type, color } or null }
   glides = null, // [{ from, to }]: pieces that have just arrived and where they came from (default: lastMove)
   portals = [], // pairs of linked cells
+  dynamite = [], // cells with a charge left
   check = null, // the cell of a king in check
   suggestion = null, // { from, to }: a move suggested by a hint or a teammate
   showMoveBalls = true,
@@ -578,6 +642,7 @@ export default function CubeBoard({
         lastMove={lastMove}
         glides={glides}
         portals={portals}
+        dynamite={dynamite}
         check={check}
         suggestion={suggestion}
         showMoveBalls={showMoveBalls}

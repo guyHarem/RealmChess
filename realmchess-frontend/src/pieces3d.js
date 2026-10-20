@@ -133,3 +133,31 @@ export function createRock() {
   rock.position.y = 0.27
   return rock
 }
+
+// Dynamite: three red sticks bound together, with a fuse and a glowing spark on top
+export function createDynamite() {
+  const group = new THREE.Group()
+  const red = new THREE.MeshStandardMaterial({ color: '#d63a2f', roughness: 0.55 })
+  const band = new THREE.MeshStandardMaterial({ color: '#3a2a22', roughness: 0.8 })
+  const stick = new THREE.CylinderGeometry(0.075, 0.075, 0.46, 20)
+  for (const [x, z] of [[-0.075, 0.04], [0.075, 0.04], [0, -0.09]]) {
+    const mesh = new THREE.Mesh(stick, red)
+    mesh.position.set(x, 0.23, z)
+    group.add(mesh)
+  }
+  const tie = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.05, 24), band)
+  tie.position.y = 0.2
+  group.add(tie)
+  const fuse = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.16, 8), band)
+  fuse.position.set(0, 0.54, 0)
+  fuse.rotation.z = 0.35
+  group.add(fuse)
+  const spark = new THREE.Mesh(
+    new THREE.SphereGeometry(0.035, 12, 8),
+    new THREE.MeshBasicMaterial({ color: '#ffd166', toneMapped: false }),
+  )
+  spark.position.set(-0.03, 0.62, 0)
+  group.add(spark)
+  return group
+}
+

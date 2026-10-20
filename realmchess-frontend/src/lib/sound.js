@@ -30,7 +30,28 @@ function note(ctx, { frequency, start = 0, length = 0.12, volume = 0.18, type = 
   oscillator.stop(at + length + 0.02)
 }
 
+// A short burst of noise falling in pitch: the dynamite going off
+function boom(ctx) {
+  const length = 0.7
+  const buffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * length), ctx.sampleRate)
+  const data = buffer.getChannelData(0)
+  for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length) ** 2
+  const source = ctx.createBufferSource()
+  source.buffer = buffer
+  const filter = ctx.createBiquadFilter()
+  filter.type = 'lowpass'
+  const at = ctx.currentTime + 0.3 // as the mover lands
+  filter.frequency.setValueAtTime(1800, at)
+  filter.frequency.exponentialRampToValueAtTime(120, at + length)
+  const gain = ctx.createGain()
+  gain.gain.value = 0.5
+  source.connect(filter).connect(gain).connect(ctx.destination)
+  source.start(at)
+  note(ctx, { frequency: 90, start: 0.3, length: 0.5, slide: 0.5, volume: 0.3 })
+}
+
 const SOUNDS = {
+  blast: boom,
   move: (ctx) => note(ctx, { frequency: 520, length: 0.09, type: 'triangle', slide: 0.7 }),
   capture: (ctx) => {
     note(ctx, { frequency: 300, length: 0.16, type: 'triangle', slide: 0.5, volume: 0.24 })

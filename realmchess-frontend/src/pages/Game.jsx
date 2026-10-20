@@ -9,7 +9,7 @@ import PlayerCard from '../components/PlayerCard.jsx'
 import TeamChat from '../components/TeamChat.jsx'
 import { FULL_BOARD, LAYERS, capturedBy, capturedPoints, describeMove, keyOf, layerOf, layersOf, otherColor, parsePiece } from '../lib/chess.js'
 import { navigate } from '../lib/router.js'
-import { clockRequest, computerRequest, levelName, loadSettings, portalRequest, saveSettings } from '../lib/settings.js'
+import { clockRequest, computerRequest, dynamiteRequest, levelName, loadSettings, portalRequest, saveSettings } from '../lib/settings.js'
 import { playSound } from '../lib/sound.js'
 import { useGame } from '../lib/useGame.js'
 import { usePhone } from '../lib/usePhone.js'
@@ -139,10 +139,14 @@ export default function Game({ id, joinSide = null }) {
         to: lastEntry.to,
         index: history.lastIndexOf(lastEntry),
         captured: lastEntry.special_move === 'en_passant' ? null : parsePiece(lastEntry.captured_piece),
+        // A blast: everything it removed (the mover too, unless a king) and the charges it set off
+        blast: lastEntry.blast?.map(([coord, text]) => ({ coord, ...parsePiece(text) })) ?? null,
+        charges: lastEntry.charges ?? [],
       }
     : null
   const size = game?.board_size?.size ?? FULL_BOARD.size
   const portals = game?.portals ?? []
+  const dynamite = game?.dynamite ?? []
   // The selected piece's moves, and the portals it can step into, which lead to some of them
   const shownMoves = portalEntries.length ? [...legalMoves, ...portalEntries] : legalMoves
   // What glides on the 3D board: the move just played (with the rook when castling), or after
@@ -199,7 +203,8 @@ export default function Game({ id, joinSide = null }) {
     if (over && !before.over) playSound('end')
     // (a promotion is its own history entry after the pawn's move, which already sounded)
     else if (moves.length > before.moves && !over && moves.at(-1).special_move !== 'promotion') {
-      playSound(moves.at(-1).captured_piece ? 'capture' : game.status === 'check' ? 'check' : 'move')
+      const last = moves.at(-1)
+      playSound(last.blast ? 'blast' : last.captured_piece ? 'capture' : game.status === 'check' ? 'check' : 'move')
     }
   }, [game, over, settings.sound])
 
@@ -280,6 +285,7 @@ export default function Game({ id, joinSide = null }) {
       move_limit: settings.moveLimit,
       clock: clockRequest(settings.clock),
       portals: portalRequest(settings),
+      dynamite: dynamiteRequest(settings),
       computer: computerRequest(settings),
     })
   }
@@ -501,6 +507,7 @@ export default function Game({ id, joinSide = null }) {
         selected={selected}
         legalMoves={shownMoves}
         portals={portals}
+        dynamite={dynamite}
         lastMove={lastMove}
         glides={glides}
         check={check}
@@ -738,6 +745,7 @@ export default function Game({ id, joinSide = null }) {
         selected={selected}
         legalMoves={shownMoves}
         portals={portals}
+        dynamite={dynamite}
         lastMove={lastMove}
         suggestion={suggestion}
         showMoves={settings.showLegalMoves}
@@ -754,7 +762,15 @@ export default function Game({ id, joinSide = null }) {
       onSay={(text) => say(text)}
     />
   )
-  const moveList = <MoveList history={history} currentPlayer={player} finished={!!outcome} portals={portals.length > 0} />
+  const moveList = (
+    <MoveList
+      history={history}
+      currentPlayer={player}
+      finished={!!outcome}
+      portals={portals.length > 0}
+      dynamite={dynamite.length > 0 || history.some((entry) => entry.blast)}
+    />
+  )
 
   if (phone) {
     // One screen, no scrolling: the 3D board for the overview, the top view for tapping,

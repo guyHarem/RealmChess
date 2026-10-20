@@ -218,6 +218,36 @@
       ]
     },
     {
+      "id": "portals",
+      "title": "Portals",
+      "text": "Some games have portals: pairs of linked cells, each pair in its own colour. A piece that ends its move on an empty portal comes out of the other one, and captures whatever enemy stands there. A sliding piece can stop on a portal but never pass over it. Portals are off unless you switch them on when you set up a game.",
+      "steps": [
+        {
+          "task": "Slide the rook onto the portal ahead of it in the Sky, and watch where it comes out.",
+          "layer": 1,
+          "portals": [[[0, 3, 1], [4, 1, -1]]],
+          "pieces": [{ "coord": [0, 0, 1], "type": "Rook", "color": "white" }],
+          "from": [0, 0, 1],
+          "to": [4, 1, -1],
+          "expect": "move",
+          "done": "In on the Sky, out in the Dungeon on the other side of the board, in one move."
+        },
+        {
+          "task": "The bishop's diagonal ends on a portal. Step in, and capture the knight at the other end.",
+          "layer": 0,
+          "portals": [[[3, 2, 0], [1, 4, 1]]],
+          "pieces": [
+            { "coord": [2, 1, 0], "type": "Bishop", "color": "white" },
+            { "coord": [1, 4, 1], "type": "Knight", "color": "black" }
+          ],
+          "from": [2, 1, 0],
+          "to": [1, 4, 1],
+          "expect": "capture",
+          "done": "A portal is a shortcut for attacks too: pieces near the far end are never as safe as they look."
+        }
+      ]
+    },
+    {
       "id": "rocks",
       "title": "Rocks in the dungeon",
       "text": "Rocks never move and can never be captured. They block rooks, bishops and queens. A knight jumps straight over them.",

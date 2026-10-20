@@ -30,8 +30,10 @@ class TestLessons(unittest.TestCase):
         board = board or self.data["board"]
         manager = GameManager()
         pieces = [{"coord": tuple(p["coord"]), "type": p["type"], "color": p.get("color")} for p in step["pieces"]]
+        portals = [[list(a), list(b)] for a, b in step.get("portals", [])] or None
         response = manager.setup_position(pieces, "white", rocks=False,
-                                          size=board["size"], z_min=board["z_min"], z_max=board["z_max"])
+                                          size=board["size"], z_min=board["z_min"], z_max=board["z_max"],
+                                          portals=portals)
         self.assertTrue(response["success"], response.get("error"))
         return manager
 

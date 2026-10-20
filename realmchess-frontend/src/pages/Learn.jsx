@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import CubeBoard from '../components/CubeBoard.jsx'
 import LayerMap from '../components/LayerMap.jsx'
 import Logo from '../components/Logo.jsx'
-import { LAYERS, keyOf, layerOf, layersOf, parsePiece, sameCoord } from '../lib/chess.js'
+import { LAYERS, keyOf, layerOf, layersOf, parsePiece, portalCells, sameCoord } from '../lib/chess.js'
 import { LESSONS as LESSON_PROGRESS, addId, loadIds } from '../lib/progress.js'
 import { useGame } from '../lib/useGame.js'
 import course from '../lessons.json'
@@ -15,7 +15,7 @@ const boardOf = (lesson) => lesson.board ?? course.board
 const loadDone = () => loadIds(LESSON_PROGRESS)
 
 export default function Learn() {
-  const { game, selected, legalMoves, error, clickCell, clearSelection, select, setup } = useGame('practice')
+  const { game, selected, legalMoves, portalEntries, error, clickCell, clearSelection, select, setup } = useGame('practice')
   const [lessonIndex, setLessonIndex] = useState(() => {
     const first = LESSONS.findIndex((lesson) => !loadDone().includes(lesson.id))
     return first === -1 ? 0 : first
@@ -32,6 +32,8 @@ export default function Learn() {
   const lastStep = stepIndex === lesson.steps.length - 1
   const lastLesson = lessonIndex === LESSONS.length - 1
   const lessonBoard = boardOf(lesson)
+  const portals = game?.portals ?? []
+  const shownMoves = [...legalMoves, ...portalEntries]
   const lessonLayers = layersOf(lessonBoard)
   const showing = game?.board_size
   const board =
@@ -44,7 +46,7 @@ export default function Learn() {
       setRevealed(false)
       setNudge(null)
       setActiveLayer(which.layer)
-      setup({ ...size, rocks: false, current_player: 'white', pieces: which.pieces })
+      setup({ ...size, rocks: false, current_player: 'white', pieces: which.pieces, portals: which.portals })
     },
     // setup is recreated every render but always talks to the same practice game
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -66,7 +68,9 @@ export default function Learn() {
 
   async function onCellClick(coord) {
     if (solved || !game) return
-    const isMove = selected && legalMoves.some((move) => sameCoord(move, coord))
+    // Clicking a portal the piece can step into means the cell it comes out on
+    const landing = portalEntries.some((entry) => sameCoord(entry, coord)) ? portalCells(portals)[keyOf(coord)].twin : coord
+    const isMove = selected && legalMoves.some((move) => sameCoord(move, landing))
     if (!isMove) {
       const piece = parsePiece(board[keyOf(coord)])
       if (piece?.color === 'white') setActiveLayer(coord[2])
@@ -75,11 +79,11 @@ export default function Learn() {
       return
     }
     // A legal move: only the one the lesson asks for is played
-    if (sameCoord(selected, step.from) && sameCoord(coord, step.to)) {
+    if (sameCoord(selected, step.from) && sameCoord(landing, step.to)) {
       await clickCell(coord)
       setSolved(true)
       setNudge(null)
-      setActiveLayer(coord[2])
+      setActiveLayer(landing[2])
       if (lastStep) finishLesson()
     } else {
       clearSelection()
@@ -184,7 +188,8 @@ export default function Learn() {
                   layers={lessonLayers}
                   activeLayer={activeLayer}
                   selected={selected}
-                  legalMoves={legalMoves}
+                  legalMoves={shownMoves}
+                  portals={portals}
                   goal={showGoal ? step.to : null}
                   onCellClick={onCellClick}
                 />
@@ -199,7 +204,8 @@ export default function Learn() {
                 z={activeLayer}
                 side="white"
                 selected={selected}
-                legalMoves={legalMoves}
+                legalMoves={shownMoves}
+                portals={portals}
                 goal={showGoal ? step.to : null}
                 onCellClick={onCellClick}
               />

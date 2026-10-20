@@ -188,7 +188,9 @@ class GameManager:
             return self._error_response(e)
 
     @staticmethod
-    def _portal_layout(portals, board):
+    def _portal_layout(portals, board, pieces_allowed=False):
+        """The pairs for set_portals. pieces_allowed: a set-up position may have a piece standing
+        on a portal (as after a trip); a starting position may not."""
         if portals == "classic":
             return CLASSIC_PORTALS
         if portals == "shuffle":
@@ -202,7 +204,7 @@ class GameManager:
             for cell in pair:
                 if not isinstance(cell, list) or len(cell) != 3 or not all(type(n) is int for n in cell):
                     raise ValueError("A portal cell is [x, y, z]")
-                if board.get_piece(tuple(cell)) is not None:
+                if not pieces_allowed and board.get_piece(tuple(cell)) is not None:
                     raise ValueError("A portal cannot be where a piece stands")
                 cells.append(tuple(cell))
             pairs.append(cells)
@@ -499,7 +501,7 @@ class GameManager:
                 game.board.is_valid_coordinate(coord)
                 game.board.board[coord] = self._create_piece(item["type"], item.get("color"), coord, size)
             if portals:
-                game.board.set_portals(self._portal_layout(portals, game.board))
+                game.board.set_portals(self._portal_layout(portals, game.board, pieces_allowed=True))
             game.current_player = current_player
             game.reset_tracking()
 

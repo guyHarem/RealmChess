@@ -27,7 +27,7 @@ It was called CubeChess until October 2026. Play it at [realmchess.com](https://
 - ✅ Home page, game setup and the game screen (local two-player)
 - ✅ Three.js 3D board: cube-shaped cells, 3D pieces, layer tools, camera controls
 - ✅ Move list, captured material, chess clock with increment, undo, resign and draw by agreement
-- ✅ Lesson player: ten lessons on a 5×5 board (three layers; the edge-pawn lesson has all five) (`realmchess-frontend/src/lessons.json`)
+- ✅ Lesson player: eleven lessons on a 5×5 board (three layers; the edge-pawn lesson has all five), including portals (`realmchess-frontend/src/lessons.json`)
 - ✅ Scenario player: 32 checkmate puzzles in four tiers (`realmchess-frontend/src/scenarios.json`)
 - ✅ Play against the computer (easy, medium, hard), with the last move marked on the board
 - ✅ Online play with a link: seats without accounts, draw and take-back offers, watching

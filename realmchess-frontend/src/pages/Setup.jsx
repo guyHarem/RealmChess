@@ -395,7 +395,7 @@ export default function Setup() {
                 : `${previewSide === 'white' ? 'White' : 'Black'} sits nearest. White moves first.`}
             <br />
             {clockSummary} {settings.rocks ? 'Rocks on.' : 'Rocks off.'}{' '}
-            {{ off: '', classic: 'Portals: two linked pairs, Space to the Abyss.', shuffle: 'Portals in random places, the same for both sides.' }[settings.portals]}{' '}
+            {{ off: '', classic: 'Portals: two linked pairs, Sky to Dungeon.', shuffle: 'Portals in random places, the same for both sides.' }[settings.portals]}{' '}
             {settings.allowUndo ? 'Undo allowed.' : 'No undo.'}
           </p>
         </aside>

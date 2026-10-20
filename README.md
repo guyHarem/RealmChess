@@ -72,8 +72,8 @@ Abyss (on b and g, the files clear of the Abyss rocks): 24 pieces a side.
 sideways together with one layer up or down it cannot step, but it can capture there, so a
 queen or bishop cannot check it from the next cell without risk.
 
-**Portals (optional):** pairs of linked cells, switched on at setup: **Classic** (Space a3 with
-Abyss h6, and its mirror Space a6 with Abyss h3; nothing reaches them on the first move) or **Shuffle** (two random pairs off the Ground
+**Portals (optional):** pairs of linked cells, switched on at setup: **Classic** (Sky a4 with
+Dungeon h5, and its mirror Sky a5 with Dungeon h4; nothing reaches them on the first move) or **Shuffle** (two random pairs off the Ground
 in the middle ranks, mirrored for the two sides, never reachable on the first move). A piece that ends its move on an empty portal
 comes out on the other cell of its pair, capturing an enemy there; it may not land on its own
 piece. A piece standing on a portal plugs it: moving there just captures it. Sliding pieces and
@@ -424,8 +424,15 @@ This project is built with a learning-first approach:
 
 ## Next Steps
 
-1. Get real players: share the link, try 2 against 2, and see what confuses newcomers
-2. Later, once people play: accounts, ratings and finding an opponent; games that survive a
+1. More special cells, each a setup option like portals:
+   - **Dynamite**: a piece that steps on it explodes, removing every piece in the 3×3×3 cube
+     around it (itself too); kings survive, rocks are destroyed, the board stays whole
+   - **Clouds** (Space and the Sky only): visible shelter; a piece inside cannot be captured,
+     but cannot capture or give check either; kings cannot enter; sliders cannot pass through
+2. Then tune every layout together with self-play (the classic portals are a stand-in): no trip
+   or blast on the first move, and special cells that come into play within a few moves
+3. Get real players: share the link, try 2 against 2, and see what confuses newcomers
+4. Later, once people play: accounts, ratings and finding an opponent; games that survive a
    crash (needs storage that outlives the server, which costs extra on Render)
 
 ---

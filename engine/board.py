@@ -7,11 +7,11 @@ ARMY_SIZE = 24   # pieces each side starts with on the full board
 
 # Portal layouts are mirror images for the two sides: flipping the ranks (rank 1 <-> rank 8)
 # turns one pair into the other, so neither side starts closer to a portal.
-# Classic: Space a3 <-> Abyss h6, and its mirror Space a6 <-> Abyss h3, linking the top
-# layer's a file with the bottom layer's h file. Nothing reaches them on the first move (on
-# the fourth and fifth ranks a pawn's opening double step could, and every game opened with
-# that trip).
-CLASSIC_PORTALS = [((0, 2, 2), (7, 5, -2)), ((0, 5, 2), (7, 2, -2))]
+# Classic: Sky a4 <-> Dungeon h5, and its mirror Sky a5 <-> Dungeon h4. Nothing reaches them on
+# the first move: with portals in Space on the fourth rank a pawn's opening double step could,
+# and every self-play game opened with that trip; further out (Space a3) they were hardly used.
+# A stand-in until dynamite and clouds exist: then all the layouts are tuned together.
+CLASSIC_PORTALS = [((0, 3, 1), (7, 4, -1)), ((0, 4, 1), (7, 3, -1))]
 
 
 def mirrored(cell, size=8):

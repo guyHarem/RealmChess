@@ -5,6 +5,32 @@ X, Y, Z = 0, 1, 2
 EXTRA_PAWN_SQUARES = [(1, 2), (6, 2), (1, -2), (6, -2)]
 ARMY_SIZE = 24   # pieces each side starts with on the full board
 
+# Portal layouts are mirror images for the two sides: flipping the ranks (rank 1 <-> rank 8)
+# turns one pair into the other, so neither side starts closer to a portal.
+# Classic: Space a4 <-> Abyss h5, and its mirror Space a5 <-> Abyss h4, linking the top
+# layer's a file with the bottom layer's h file.
+CLASSIC_PORTALS = [((0, 3, 2), (7, 4, -2)), ((0, 4, 2), (7, 3, -2))]
+
+
+def mirrored(cell, size=8):
+    x, y, z = cell
+    return (x, size - 1 - y, z)
+
+
+def shuffled_portals(rng, board):
+    """Two random portal pairs, mirrored for the two sides: each pair joins two different
+    layers off the Ground, in the middle four ranks, away from rocks"""
+    size = board.size
+    cells = [(x, y, z) for z in range(board.z_min, board.z_max + 1) if z != 0
+             for y in range(2, size - 2) for x in range(size)
+             if type(board.board.get((x, y, z))).__name__ != "Rock"]
+    while True:
+        first = rng.choice(cells)
+        second = rng.choice([cell for cell in cells if cell[2] != first[2]])
+        pairs = [(first, second), (mirrored(first, size), mirrored(second, size))]
+        if len({cell for pair in pairs for cell in pair}) == 4:
+            return pairs
+
 class Board:
     def __init__(self, size=8, z_min=-2, z_max=2):
         # size x size squares per layer, layers z_min..z_max (the Ground is z=0)

@@ -10,6 +10,7 @@ import unittest
 
 from ai.board import FastBoard, move_promotion
 from api.game_manager import GameManager
+from engine.board import CLASSIC_PORTALS, shuffled_portals
 from engine.game_state import GameState
 from engine.pieces import King, Queen, Rook, Bishop, Knight, Pawn
 
@@ -85,12 +86,23 @@ class FastBoardTestCase(unittest.TestCase):
             game.promote_pawn(to_coord, PIECES[promotion](mover))
         board.make(move)
 
-    def play_out(self, game, rng, plies, tag):
+    def play_out(self, game, rng, plies, tag, portals=False):
         board = FastBoard.from_game_state(game)
         for ply in range(plies):
             moves = self.assert_same_position(game, f"{tag} ply {ply}", board)
             if not moves:
                 break
+            if portals:
+                # Go through a portal whenever one is open: trips, captures and checks through them
+                routes = {}
+                for m in moves:
+                    origin = board.describe(m)[0]
+                    if origin not in routes:
+                        routes[origin] = game._legal_routes(origin)
+                trips = [m for m in moves if routes[board.describe(m)[0]].get(board.describe(m)[1])]
+                if trips and rng.random() < 0.8:
+                    self.play(game, board, rng.choice(trips))
+                    continue
             # Favour captures, promotions and pawn moves: they exercise the rare rules
             sharp = [m for m in moves
                      if game.board.get_piece(board.describe(m)[1]) is not None or move_promotion(m)
@@ -110,6 +122,31 @@ class TestAgainstTheEngine(FastBoardTestCase):
     def test_random_games_from_the_starting_position(self):
         for seed in range(4):
             self.play_out(GameState(), random.Random(seed), 70, f"game seed {seed}")
+
+    def test_random_games_through_portals(self):
+        """The classic portals, and shuffled ones, from the starting position"""
+        for seed in range(4):
+            rng = random.Random(4000 + seed)
+            game = GameState()
+            game.board.set_portals(CLASSIC_PORTALS if seed % 2 == 0 else shuffled_portals(rng, game.board))
+            self.play_out(game, rng, 40, f"portal game seed {seed}", portals=True)
+
+    def test_random_positions_with_portals(self):
+        """Scattered pieces around portals, where travel, captures through them and checks
+        through them come up often"""
+        for seed in range(50):
+            rng = random.Random(5000 + seed)
+            game = self.random_game(rng, 8, -2, 2, rocks=seed % 2 == 0, count=rng.randint(4, 22))
+            if game is None:
+                continue
+            free = [(x, y, z) for x in range(8) for y in range(1, 7) for z in range(-2, 3)
+                    if game.board.board.get((x, y, z)) is None]
+            cells = rng.sample(free, 4)
+            game.board.set_portals([(cells[0], cells[1]), (cells[2], cells[3])])
+            game.reset_tracking()
+            if game.is_in_check("black" if game.current_player == "white" else "white"):
+                continue   # the portals put the side that just moved in check
+            self.play_out(game, rng, 8, f"portal position seed {seed}", portals=True)
 
     def test_random_positions(self):
         """Scattered pieces on the full board, with and without rocks, then a few moves each"""

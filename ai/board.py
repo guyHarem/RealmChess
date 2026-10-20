@@ -72,8 +72,13 @@ class FastBoard:
         """Copy a live game (which must not be waiting for a promotion choice)"""
         if game.pending_promotion is not None:
             raise ValueError("Promote the pawn before asking the computer to think")
+        if game.board.portals and cls is FastBoard:
+            cls = PortalBoard
         board = cls(*game.board.bounds, params=params)
         index = board.t.index
+        if game.board.portals:
+            for cell, twin in game.board.portals.items():
+                board.twin[index[cell]] = index[twin]
         for coord, piece in game.board.board.items():
             name = type(piece).__name__
             if name == "Rock":
@@ -603,3 +608,172 @@ class FastBoard:
             if described == wanted or (promotion is None and described[:2] == wanted[:2]):
                 return move
         return None
+
+
+class PortalBoard(FastBoard):
+    """A FastBoard for a game with portals (see GameState: a piece ending its move on an empty
+    portal comes out on the other cell of the pair). Moves name the cell a piece lands on. The
+    quick shortcuts FastBoard takes for king safety assume checks come along lines or from
+    nearby, which a portal breaks, so this board always does the full test: slower, and only
+    used when the game has portals."""
+
+    def __init__(self, size=8, z_min=-2, z_max=2, params=None):
+        super().__init__(size, z_min, z_max, params)
+        self.twin = [-1] * self.t.n        # each portal square -> the other square of its pair
+
+    def _landing(self, target):
+        """Where a move ending on target lands: through an empty portal, on its twin"""
+        twin = self.twin[target]
+        return twin if twin >= 0 and not self.cells[target] else target
+
+    # ---------- attacks ----------
+
+    def _attacked_directly(self, square, by):
+        cells, tables, twin = self.cells, self.t, self.twin
+        knight = KNIGHT | by
+        for origin in tables.knight[square]:
+            if cells[origin] == knight:
+                return True
+        king = KING | by
+        for origin in tables.king_attacks[square]:
+            if cells[origin] & 15 == king:
+                return True
+        pawn = PAWN | by
+        for origin in tables.pawn_attackers[by >> 3][square]:
+            if cells[origin] & 15 == pawn:
+                return True
+        for kind in (ROOK, BISHOP):
+            slider, queen = kind | by, QUEEN | by
+            for line in tables.slides[kind][square]:
+                for origin in line:
+                    piece = cells[origin]
+                    if piece:
+                        piece &= 15
+                        if piece == slider or piece == queen:
+                            return True
+                        break
+                    if twin[origin] >= 0:
+                        break      # an empty portal: nothing passes over it
+        return False
+
+    def attacked(self, square, by):
+        if self._attacked_directly(square, by):
+            return True
+        portal = self.twin[square]
+        return portal >= 0 and not self.cells[portal] and self._attacked_directly(portal, by)
+
+    def exposes_king(self, move, was_in_check):
+        opponent = self.side
+        king = self.kings[(opponent ^ BLACK) >> 3]
+        return king >= 0 and self.attacked(king, opponent)
+
+    def gives_check(self, move):
+        return self.in_check()
+
+    def needs_check_test(self, in_check):
+        if self.kings[self.side >> 3] < 0:
+            return lambda move: False
+        return lambda move: True
+
+    # ---------- moves ----------
+
+    def pseudo_moves(self):
+        cells, tables, twin = self.cells, self.t, self.twin
+        side = self.side
+        colour = side >> 3
+        enemy = ENEMY[colour]
+        found = {}   # (from, to, promotion) -> move: a cell reached two ways is one move
+
+        def add(move):
+            key = move & ~KIND
+            if key not in found or move & KIND:   # a double step keeps its en passant mark
+                found[key] = move
+
+        def land(origin, target, needs):
+            """The square the move lands on, or -1. needs: 0 empty, 1 enemy, 2 either"""
+            occupant = cells[target]
+            if not occupant and twin[target] >= 0:
+                target = twin[target]
+                if target == origin:
+                    return -1
+                occupant = cells[target]
+            if not occupant:
+                return target if needs != 1 else -1
+            return target if needs != 0 and enemy[occupant] else -1
+
+        for origin in list(self.squares[colour]):
+            piece = cells[origin]
+            kind = piece & 7
+            if kind == PAWN:
+                promotes = tables.promotes[colour]
+
+                def pawn_move(target, extra=0):
+                    if promotes[target]:
+                        for choice in PROMOTIONS:
+                            add(origin | target << 9 | choice << 18)
+                    else:
+                        add(origin | target << 9 | extra)
+
+                for target in tables.pawn_steps[colour][origin]:
+                    landing = land(origin, target, 0)
+                    if landing >= 0:
+                        pawn_move(landing)
+                if piece & UNMOVED:
+                    for target, middle in tables.pawn_doubles[colour][origin]:
+                        if cells[middle] or twin[middle] >= 0:
+                            continue
+                        landing = land(origin, target, 0)
+                        if landing >= 0:
+                            pawn_move(landing, DOUBLE if landing == target else 0)
+                for target in tables.pawn_captures[colour][origin]:
+                    landing = land(origin, target, 1)
+                    if landing >= 0:
+                        pawn_move(landing)
+                    elif target == self.ep:
+                        add(origin | target << 9 | EN_PASSANT)
+            elif kind == KNIGHT or kind == KING:
+                for target in (tables.knight if kind == KNIGHT else tables.king)[origin]:
+                    landing = land(origin, target, 2)
+                    if landing >= 0:
+                        add(origin | landing << 9)
+                if kind == KING:
+                    for target in tables.king_takes[origin]:
+                        landing = land(origin, target, 1)
+                        if landing >= 0:
+                            add(origin | landing << 9)
+                    if piece & UNMOVED:
+                        self._add_castling(origin, side, add)
+            else:
+                for line in tables.slides[kind][origin]:
+                    for target in line:
+                        if cells[target] or twin[target] >= 0:
+                            landing = land(origin, target, 2)
+                            if landing >= 0:
+                                add(origin | landing << 9)
+                            break
+                        add(origin | target << 9)
+        return list(found.values())
+
+    def _add_castling(self, king, side, add):
+        """As FastBoard, but a portal between king and rook blocks it (as in the engine)"""
+        cells, twin = self.cells, self.twin
+        rook = ROOK | side | UNMOVED
+        opponent = side ^ BLACK
+        for line in self.t.row[king]:
+            for distance, square in enumerate(line):
+                if twin[square] >= 0:
+                    break
+                if cells[square]:
+                    if cells[square] == rook and distance >= 2:
+                        if not self.attacked(king, opponent) and not self.attacked(line[0], opponent) \
+                                and not self.attacked(line[1], opponent):
+                            add(king | line[1] << 9 | CASTLE)
+                    break
+
+    def captures(self):
+        """Pseudo-legal captures and queen promotions only"""
+        cells = self.cells
+        return [move for move in self.pseudo_moves()
+                if (cells[(move >> 9) & SQUARE] or move & KIND == EN_PASSANT or (move >> 18) & 7)
+                and (move >> 18) & 7 in (0, QUEEN)]
+

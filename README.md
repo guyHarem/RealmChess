@@ -72,6 +72,14 @@ Abyss (on b and g, the files clear of the Abyss rocks): 24 pieces a side.
 sideways together with one layer up or down it cannot step, but it can capture there, so a
 queen or bishop cannot check it from the next cell without risk.
 
+**Portals (optional):** pairs of linked cells, switched on at setup: **Classic** (Space a4 with
+Abyss h5, and its mirror Space a5 with Abyss h4) or **Shuffle** (two random pairs off the Ground
+in the middle ranks, mirrored for the two sides). A piece that ends its move on an empty portal
+comes out on the other cell of its pair, capturing an enemy there; it may not land on its own
+piece. A piece standing on a portal plugs it: moving there just captures it. Sliding pieces and
+double steps cannot pass over an empty portal. Attacks go through portals the same way, so a
+portal can give check. Notation marks a trip with ⊙ (`R⊙h5↓2`).
+
 **Square colors:** the checkered pattern shifts by one square on every other layer, so a bishop
 keeps its color when it changes layer. The top-down view shows chess coordinates (a-h, 1-8).
 
@@ -246,10 +254,10 @@ The test bench edits positions through sandbox endpoints that are for testing on
 | `/api/game/join` | POST | Online: take a free seat (optional `{"side"}`), or watch |
 | `/api/game/offer` | POST | Online: offer a draw or ask to take a move back |
 | `/api/game/answer` | POST | Online: accept, decline or withdraw the offer |
-| `/api/game/new` | POST | Start a new game in the same room. Optional body: `{"rocks": true, "move_limit": 50, "clock": {"initial": 600, "increment": 5}, "computer": {"color": "black", "level": "hard"}}` |
+| `/api/game/new` | POST | Start a new game in the same room. Optional body: `{"rocks": true, "move_limit": 50, "clock": {"initial": 600, "increment": 5}, "computer": {"color": "black", "level": "hard"}, "portals": "classic"}`. portals: `"classic"`, `"shuffle"` or the pairs `[[[x,y,z],[x,y,z]], ...]`; every game answer lists them as `portals` |
 | `/api/game/state` | GET | Get current board state |
 | `/api/game/move` | POST | Execute a move |
-| `/api/game/legal-moves` | GET | Get legal moves for piece |
+| `/api/game/legal-moves` | GET | Get legal moves for piece: the cells it lands on, and `portal_entries`, the portals it can step into |
 | `/api/game/computer-move` | POST | The computer thinks and plays (only on its turn) |
 | `/api/game/promote` | POST | Promote pawn |
 | `/api/game/undo` | POST | Undo last move (also reopens a game ended by resignation, agreement or timeout) |

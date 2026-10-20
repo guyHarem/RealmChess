@@ -1,11 +1,25 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import CubeBoard from '../components/CubeBoard.jsx'
+import FeedbackButton from '../components/Feedback.jsx'
 import { LogoMark } from '../components/Logo.jsx'
+import { fetchLobby } from '../lib/api.js'
 import { LESSON_BOARD, LESSON_MOVES, PUZZLE_BOARD, SMALL_BOARD, START_BOARD } from '../lib/chess.js'
 import { LESSONS, PUZZLES, clearProgress, loadIds } from '../lib/progress.js'
+import course from '../lessons.json'
 
 export default function Home() {
   const [started, setStarted] = useState(() => loadIds(LESSONS).length + loadIds(PUZZLES).length > 0)
+  const [waiting, setWaiting] = useState(null) // open games in the lobby, once known
+
+  useEffect(() => {
+    let stopped = false
+    fetchLobby()
+      .then((data) => !stopped && data.success && setWaiting(data.games.length))
+      .catch(() => {})
+    return () => {
+      stopped = true
+    }
+  }, [])
   return (
     <div className="page home">
       <main className="home-main">
@@ -33,7 +47,7 @@ export default function Home() {
               />
             </div>
             <h2>Learn How to Play</h2>
-            <p>Nine short lessons on a small board. Try every move yourself.</p>
+            <p>{course.lessons.length} short lessons. Try every move yourself.</p>
             <span className="button">Start learning</span>
           </a>
 
@@ -56,6 +70,20 @@ export default function Home() {
           </a>
         </div>
 
+        <a className="home-lobby" href="#/lobby">
+          <span>
+            <strong>Play anyone online</strong>
+            {waiting === null
+              ? 'Join an open game, or open one and wait for an opponent.'
+              : waiting === 0
+                ? 'No open games right now: open one, and someone can join it.'
+                : waiting === 1
+                  ? '1 open game is waiting for a player.'
+                  : `${waiting} open games are waiting for players.`}
+          </span>
+          <span className="button">Find an opponent</span>
+        </a>
+
         <p className="home-note">
           {started
             ? 'This browser remembers the lessons and puzzles you finish. '
@@ -71,7 +99,8 @@ export default function Home() {
             >
               Start over
             </button>
-          )}
+          )}{' '}
+          <FeedbackButton className="link-button" />
         </p>
       </main>
     </div>

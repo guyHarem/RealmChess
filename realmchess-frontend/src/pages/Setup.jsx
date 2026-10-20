@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import CubeBoard from '../components/CubeBoard.jsx'
+import FeedbackButton from '../components/Feedback.jsx'
 import Logo from '../components/Logo.jsx'
 import { OFFLINE, openGame } from '../lib/api.js'
 import { CLASSIC_CLOUDS, CLASSIC_DYNAMITE, CLASSIC_PORTALS, START_BOARD } from '../lib/chess.js'
@@ -75,10 +76,71 @@ export default function Setup() {
   const online = settings.opponent === 'online'
   const teams = settings.teams
   const teamVsComputer = online && teams && settings.onlineRival === 'computer'
+  const openToAll = online && settings.openGame
   const level = LEVELS.find((option) => option.id === settings.level)
   const previewBoard = settings.rocks
     ? START_BOARD
     : Object.fromEntries(Object.entries(START_BOARD).filter(([, value]) => value !== 'Rock'))
+
+  // The special cells, all three set at once
+  const allSpecials = ['portals', 'dynamite', 'clouds'].every((name) => settings[name] === 'classic')
+  const specialSelect = (name, label) => (
+    <div className="field">
+      <label htmlFor={name}>{label}</label>
+      <select id={name} value={settings[name]} onChange={(event) => set({ [name]: event.target.value })}>
+        {PORTAL_CHOICES.map((choice) => (
+          <option key={choice.id} value={choice.id}>
+            {choice.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  )
+  const rules = (
+    <fieldset>
+      <legend>Rules and help</legend>
+      <div className="switches">
+        <Switch label="Rocks in the dungeon" checked={settings.rocks} onChange={(rocks) => set({ rocks })} />
+        <Switch
+          label="Show legal moves"
+          checked={settings.showLegalMoves}
+          onChange={(showLegalMoves) => set({ showLegalMoves })}
+        />
+        <Switch label="Allow undo" checked={settings.allowUndo} onChange={(allowUndo) => set({ allowUndo })} />
+        <div className="field">
+          <label htmlFor="quiet">Draw after quiet moves</label>
+          <input
+            id="quiet"
+            type="number"
+            min="10"
+            max="200"
+            value={settings.moveLimit}
+            aria-invalid={!limitValid}
+            aria-describedby="quiet-help"
+            onChange={(event) => set({ moveLimit: event.target.value })}
+          />
+        </div>
+        <div className="special-cells">
+          {specialSelect('portals', 'Portals')}
+          {specialSelect('dynamite', 'Dynamite')}
+          {specialSelect('clouds', 'Clouds')}
+          <button
+            type="button"
+            className={`button special-preset ${allSpecials ? 'is-on' : ''}`}
+            aria-pressed={allSpecials}
+            onClick={() => set(allSpecials ? { portals: 'off', dynamite: 'off', clouds: 'off' } : { portals: 'classic', dynamite: 'classic', clouds: 'classic' })}
+          >
+            {allSpecials ? 'All off' : 'All Classic'}
+          </button>
+        </div>
+      </div>
+      <p id="quiet-help" className={`help ${limitValid ? '' : 'help-error'}`}>
+        {limitValid
+          ? 'Drawn when both make this many moves in a row with no capture or pawn move.'
+          : 'Enter a whole number from 10 to 200.'}
+      </p>
+    </fieldset>
+  )
 
   async function start() {
     setStarting(true)
@@ -88,6 +150,7 @@ export default function Setup() {
         kind: online ? 'online' : againstComputer ? 'computer' : 'local',
         side,
         teams,
+        public: openToAll || undefined,
         rocks: settings.rocks,
         move_limit: limit,
         clock: clockRequest(clock),
@@ -113,9 +176,12 @@ export default function Setup() {
     <div className="page">
       <header className="bar">
         <Logo />
-        <a className="bar-link" href="#/">
-          Back to home
-        </a>
+        <div className="bar-links">
+          <FeedbackButton />
+          <a className="bar-link" href="#/">
+            Back to home
+          </a>
+        </div>
       </header>
 
       <main className="setup-main">
@@ -137,9 +203,19 @@ export default function Setup() {
                 title="Computer"
                 hint="Pick a level below"
               />
-              <Choice selected={online} onClick={() => set({ opponent: 'online' })} title="Online" hint="Send a friend a link" />
+              <Choice selected={online} onClick={() => set({ opponent: 'online' })} title="Online" hint="A friend, or anyone" />
             </div>
           </fieldset>
+
+          {online && (
+            <fieldset>
+              <legend>Who can join</legend>
+              <div className="choices">
+                <Choice selected={!openToAll} onClick={() => set({ openGame: false })} title="A friend" hint="You send a link" />
+                <Choice selected={openToAll} onClick={() => set({ openGame: true })} title="Anyone" hint="Listed in the lobby" />
+              </div>
+            </fieldset>
+          )}
 
           <div className="setup-pair">
             <fieldset>
@@ -252,132 +328,10 @@ export default function Setup() {
                 <span>Rules and help</span>
                 <small>{rulesSummary}</small>
               </summary>
-              <fieldset>
-                <legend>Rules and help</legend>
-                <div className="switches">
-                  <Switch label="Rocks in the dungeon" checked={settings.rocks} onChange={(rocks) => set({ rocks })} />
-                  <Switch
-                    label="Show legal moves"
-                    checked={settings.showLegalMoves}
-                    onChange={(showLegalMoves) => set({ showLegalMoves })}
-                  />
-                  <Switch label="Allow undo" checked={settings.allowUndo} onChange={(allowUndo) => set({ allowUndo })} />
-                  <div className="field">
-                    <label htmlFor="quiet">Draw after quiet moves</label>
-                    <input
-                      id="quiet"
-                      type="number"
-                      min="10"
-                      max="200"
-                      value={settings.moveLimit}
-                      aria-invalid={!limitValid}
-                      aria-describedby="quiet-help"
-                      onChange={(event) => set({ moveLimit: event.target.value })}
-                    />
-                  </div>
-                  <div className="special-cells">
-                    <div className="field">
-                      <label htmlFor="portals">Portals</label>
-                      <select id="portals" value={settings.portals} onChange={(event) => set({ portals: event.target.value })}>
-                        {PORTAL_CHOICES.map((choice) => (
-                          <option key={choice.id} value={choice.id}>
-                            {choice.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="field">
-                      <label htmlFor="dynamite">Dynamite</label>
-                      <select id="dynamite" value={settings.dynamite} onChange={(event) => set({ dynamite: event.target.value })}>
-                        {PORTAL_CHOICES.map((choice) => (
-                          <option key={choice.id} value={choice.id}>
-                            {choice.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="field">
-                      <label htmlFor="clouds">Clouds</label>
-                      <select id="clouds" value={settings.clouds} onChange={(event) => set({ clouds: event.target.value })}>
-                        {PORTAL_CHOICES.map((choice) => (
-                          <option key={choice.id} value={choice.id}>
-                            {choice.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                </div>
-                <p id="quiet-help" className={`help ${limitValid ? '' : 'help-error'}`}>
-                  {limitValid
-                    ? 'Drawn when both make this many moves in a row with no capture or pawn move.'
-                    : 'Enter a whole number from 10 to 200.'}
-                </p>
-              </fieldset>
+              {rules}
             </details>
           ) : (
-            <fieldset>
-              <legend>Rules and help</legend>
-              <div className="switches">
-                <Switch label="Rocks in the dungeon" checked={settings.rocks} onChange={(rocks) => set({ rocks })} />
-                <Switch
-                  label="Show legal moves"
-                  checked={settings.showLegalMoves}
-                  onChange={(showLegalMoves) => set({ showLegalMoves })}
-                />
-                <Switch label="Allow undo" checked={settings.allowUndo} onChange={(allowUndo) => set({ allowUndo })} />
-                <div className="field">
-                  <label htmlFor="quiet">Draw after quiet moves</label>
-                  <input
-                    id="quiet"
-                    type="number"
-                    min="10"
-                    max="200"
-                    value={settings.moveLimit}
-                    aria-invalid={!limitValid}
-                    aria-describedby="quiet-help"
-                    onChange={(event) => set({ moveLimit: event.target.value })}
-                  />
-                </div>
-                <div className="special-cells">
-                  <div className="field">
-                    <label htmlFor="portals">Portals</label>
-                    <select id="portals" value={settings.portals} onChange={(event) => set({ portals: event.target.value })}>
-                      {PORTAL_CHOICES.map((choice) => (
-                        <option key={choice.id} value={choice.id}>
-                          {choice.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="field">
-                    <label htmlFor="dynamite">Dynamite</label>
-                    <select id="dynamite" value={settings.dynamite} onChange={(event) => set({ dynamite: event.target.value })}>
-                      {PORTAL_CHOICES.map((choice) => (
-                        <option key={choice.id} value={choice.id}>
-                          {choice.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="field">
-                    <label htmlFor="clouds">Clouds</label>
-                    <select id="clouds" value={settings.clouds} onChange={(event) => set({ clouds: event.target.value })}>
-                      {PORTAL_CHOICES.map((choice) => (
-                        <option key={choice.id} value={choice.id}>
-                          {choice.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              </div>
-              <p id="quiet-help" className={`help ${limitValid ? '' : 'help-error'}`}>
-                {limitValid
-                  ? 'Drawn when both make this many moves in a row with no capture or pawn move.'
-                  : 'Enter a whole number from 10 to 200.'}
-              </p>
-            </fieldset>
+            rules
           )}
 
           {error && <p className="banner-error">{error}</p>}
@@ -411,20 +365,22 @@ export default function Setup() {
                   : teamVsComputer
                     ? `Your team against the computer online, ${levelName(settings.level)}`
                     : online
-                      ? 'Your team against another team online'
+                      ? openToAll ? 'Your team against anyone online' : 'Your team against another team online'
                       : 'Four players on this screen'
                 : againstComputer
                   ? `You against the computer, ${levelName(settings.level)}`
                   : online
-                    ? 'You against a friend online'
+                    ? openToAll ? 'You against anyone online' : 'You against a friend online'
                     : 'Two players on this screen'}
             </strong>
             {teams
               ? `${
                   online
                     ? teamVsComputer
-                      ? 'You get a link for your teammate.'
-                      : 'You get two links: one for your teammate, one for the other team.'
+                      ? openToAll ? 'Anyone in the lobby can join as your teammate.' : 'You get a link for your teammate.'
+                      : openToAll
+                        ? 'Anyone in the lobby can take the free seats; you also get links to send.'
+                        : 'You get two links: one for your teammate, one for the other team.'
                     : againstComputer
                       ? `${level.hint}.`
                       : 'Two a side.'
@@ -434,7 +390,7 @@ export default function Setup() {
                     : 'White 1, Black 1, White 2, Black 2'
                 }, and round again.`
               : online
-              ? `You get a link to send. ${
+              ? `${openToAll ? 'Your game waits in the lobby for anyone to join.' : 'You get a link to send.'} ${
                   sideChoice === 'random' ? 'A coin flip decides your side.' : `You play ${previewSide === 'white' ? 'White and move first' : 'Black'}.`
                 }`
               : againstComputer

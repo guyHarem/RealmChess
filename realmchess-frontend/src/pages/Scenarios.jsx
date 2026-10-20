@@ -4,7 +4,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import CubeBoard from '../components/CubeBoard.jsx'
 import LayerMap from '../components/LayerMap.jsx'
 import LayerPicker from '../components/LayerPicker.jsx'
+import FeedbackButton from '../components/Feedback.jsx'
 import Logo from '../components/Logo.jsx'
+import { track } from '../lib/api.js'
 import { boardFromPieces, keyOf, layerOf, layersOf, parsePiece, sameCoord } from '../lib/chess.js'
 import { PUZZLES, addId, loadIds } from '../lib/progress.js'
 import { useGame } from '../lib/useGame.js'
@@ -20,9 +22,12 @@ function Header({ back }) {
   return (
     <header className="bar">
       <Logo />
-      <a className="bar-link" href={back.href}>
-        {back.label}
-      </a>
+      <div className="bar-links">
+        <FeedbackButton />
+        <a className="bar-link" href={back.href}>
+          {back.label}
+        </a>
+      </div>
     </header>
   )
 }
@@ -140,6 +145,7 @@ function Play({ scenario }) {
   function markSolved() {
     setPhase('solved')
     setJustSolved(true)
+    if (!loadIds(PUZZLES).includes(scenario.id)) track({ event: 'puzzle_solved' })
     addId(PUZZLES, scenario.id)
   }
 

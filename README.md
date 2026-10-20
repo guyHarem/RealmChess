@@ -41,13 +41,20 @@ It was called CubeChess until October 2026. Play it at [realmchess.com](https://
   take-back), a captured piece fades away, and a red pulse marks a king in check on the 3D board
 - ✅ Hints from the computer in games against it and on one screen; in online team games a
   team chat, and suggesting a move on your teammate's turn
+- ✅ Lobby (`#/lobby`): open online games anyone can join, and Play now, which joins the game
+  that has waited longest or opens one. Players there are strangers, so they talk with a few
+  set phrases; friends with a link type freely. A player whose opponent has been gone for a
+  minute can claim the game
+- ✅ Feedback button on every page, and an admin page (`#/admin`) with anonymous play counts
+  per day and the feedback
 - 🔧 Developer test bench at `#/bench` for checking backend behavior
 
 ### Phase 3: Polish & Deployment
 - ✅ Hosted on Render at realmchess.com; a deploy hands the games in progress to the new server
 - ✅ Link previews and home-screen icons (`realmchess-frontend/dev/share-images.html`)
 - ✅ Testing suite: engine, computer player, API, online and team play, hosting (`tests/`)
-- ⏳ Games that survive a crash (would need storage that outlives the server, which costs extra)
+- ⏳ Games, counts and feedback that survive a crash (would need storage that outlives the server,
+  which costs extra)
 
 ---
 
@@ -195,6 +202,23 @@ service that builds the pages and starts `serve.py`.
 The file sets one computer thinker, which suits a plan with one core or less; raise
 `REALMCHESS_THINKERS` together with the plan.
 
+#### Admin page and play counts
+
+`realmchess.com/#/admin` shows what is going on now (games being played, players connected,
+open games), counts per day (visitors, games started and finished by kind and options, how
+they ended, results against each computer level, pages opened, lessons finished, puzzles
+solved, lobby use, messages, hints) and the messages sent with the Feedback button, which can
+be marked handled. It asks for `REALMCHESS_ADMIN_KEY`, which `render.yaml` has Render make up:
+copy it from the service's **Environment** page in the dashboard (if the service does not pick
+up the new line by itself, add the variable there, any long random value). Without the key the
+hosted admin page stays closed; on your own machine it is open.
+
+The counts are anonymous (`api/stats.py`): no cookies, nothing sent to another service, and
+visitors are counted once a day from a salted hash of their address and the day, so neither
+the address nor the same visitor on another day can be recovered. Like the games, counts and
+feedback live in memory and move to the new server on a deploy; a crash loses them. Each
+feedback message is also written to the server log (Render keeps logs for a few days).
+
 #### Custom domain
 
 `render.yaml` attaches realmchess.com to the service; Render adds www.realmchess.com itself,
@@ -283,10 +307,17 @@ The test bench edits positions through sandbox endpoints that are for testing on
 | `/api/game/undo` | POST | Undo last move (also reopens a game ended by resignation, agreement or timeout) |
 | `/api/game/resign` | POST | Resign. Optional body: `{"color": "white"}`; default is the player to move |
 | `/api/game/draw` | POST | Both players agreed to a draw |
+| `/api/game/say` | POST | Online: a message, `{"text", "to": "team" \| "all", "move"}` (see Team games and the lobby below) |
+| `/api/game/claim` | POST | Online: win a game the other side has left (when `online.claimable` is true) |
+| `/api/game/hint` | POST | The computer suggests a move without playing it |
+| `/api/lobby` | GET | Open games waiting for players, how many online games are being played, and the phrases |
+| `/api/visit` | POST | A page was opened (`{"page"}`) or something happened (`{"event"}`), for the play counts |
+| `/api/feedback` | POST | `{"kind": "bug" \| "idea" \| "other", "text", "contact", "page", "game"}` |
+| `/api/admin` | GET | Admin page data; needs `X-Admin-Key` (`POST /api/admin/feedback` `{"id", "done"}` marks a message) |
 
 Coordinates are `[x, y, z]` lists. Every game-state response carries `current_player`,
 `board` (`{"[4, 0, 0]": "King(white)", ...}`), `status` (`ongoing`, `check`, `checkmate`,
-`stalemate`, `draw`, `resigned`, `agreed_draw`, `timeout`), `winner`, `draw_reason`,
+`stalemate`, `draw`, `resigned`, `abandoned`, `agreed_draw`, `timeout`), `winner`, `draw_reason`,
 `halfmove_clock`, `move_limit`, `clock`, `board_size`, `pending_promotion` and `move_history`. Failed requests return
 HTTP 400 with `success: false` and an `error` message.
 
@@ -356,6 +387,17 @@ move". Teammates talk with `POST /api/game/say` `{"text": "...", "move": {"from"
 optional, a suggestion that must be playable in the position now); `online.chat` lists your
 own team's messages, each with the position `version` it was about.
 
+**The lobby:** `"public": true` with `"kind": "online"` opens a game anyone can join.
+`GET /api/lobby` lists the open games with a free seat whose players are still there (seen in
+the last 15 seconds), oldest first: `{"id", "teams", "computer", "free": ["white"], "players",
+"clock", "rocks", "portals", "dynamite", "clouds", "moves", "waiting"}`. Joining is the usual
+`POST /api/game/join`. Messages: `POST /api/game/say` with `"to": "all"` reaches everyone
+playing (any online game); `"to": "team"` your teammate only. In an open game the text must be
+one of the phrases in `online.phrases` (players there are strangers). `online.away` lists the
+seats whose player has stopped asking, with about how many seconds ago; once every seat is
+taken and the whole other side has been gone for a minute, `online.claimable` is true and
+`POST /api/game/claim` wins the game (`status` `abandoned`).
+
 **Hints:** `POST /api/game/hint` answers with the game and `hint`: `{"from", "to", "promotion",
 "version"}`, the computer's choice for the player to move (thinking a second at the strongest
 level), not played. For games on one screen, against the computer, and a team playing the
@@ -403,14 +445,16 @@ RealmChess/
 ├── api/                   # Flask backend
 │   ├── app.py            # HTTP routes
 │   ├── game_manager.py   # Business logic wrapper
-│   ├── rooms.py          # One room per game; seats and offers for online games
+│   ├── rooms.py          # One room per game; seats, offers, messages and the lobby for online games
+│   ├── stats.py          # Anonymous play counts and feedback, for the admin page
+│   ├── handoff.py        # Handing games, counts and feedback to the new server on a deploy
 │   ├── clock.py          # Chess clock
 │   ├── thinker.py        # Runs the computer's thinking in worker processes
 │   ├── limits.py         # Per-visitor limits for the hosted game
 │   └── utils.py          # JSON serialization
 ├── realmchess-frontend/    # React + Vite + Three.js frontend
 │   ├── src/
-│   │   ├── pages/        # Home, Setup, Game
+│   │   ├── pages/        # Home, Setup, Game, Lobby, Learn, Scenarios, Admin
 │   │   ├── components/   # CubeBoard (3D), LayerMap, MoveList, PlayerCard...
 │   │   ├── lib/          # API calls, game hook, notation, settings
 │   │   ├── bench/        # Developer test bench
@@ -444,8 +488,9 @@ This project is built with a learning-first approach:
 
 ## Next Steps
 
-1. Get real players: share the link, try 2 against 2, and see what confuses newcomers
-2. Later, once people play: accounts, ratings and finding an opponent; games that survive a
+1. Get real players: share the link, point them at the lobby, and watch the admin page and the
+   feedback to see what they use and what confuses them
+2. Later, once people play: accounts and ratings; games, counts and feedback that survive a
    crash (needs storage that outlives the server, which costs extra on Render)
 
 ---
@@ -456,4 +501,5 @@ See [IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md) for detailed technical sp
 
 ---
 
-**Status:** live at realmchess.com. Engine, computer player, pages, online and team play done.
+**Status:** live at realmchess.com. Engine, computer player, pages, online and team play, the
+lobby, feedback and the admin page done.

@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import CubeBoard from '../components/CubeBoard.jsx'
 import LayerMap from '../components/LayerMap.jsx'
+import FeedbackButton from '../components/Feedback.jsx'
 import Logo from '../components/Logo.jsx'
+import { track } from '../lib/api.js'
 import { LAYERS, keyOf, layerOf, layersOf, parsePiece, portalCells, sameCoord } from '../lib/chess.js'
 import { LESSONS as LESSON_PROGRESS, addId, loadIds } from '../lib/progress.js'
 import { useGame } from '../lib/useGame.js'
@@ -65,7 +67,10 @@ export default function Learn() {
   }
 
   function finishLesson() {
-    if (!done.includes(lesson.id)) setDone(addId(LESSON_PROGRESS, lesson.id))
+    if (!done.includes(lesson.id)) {
+      setDone(addId(LESSON_PROGRESS, lesson.id))
+      track({ event: 'lesson_done' })
+    }
   }
 
   async function onCellClick(coord) {
@@ -111,9 +116,12 @@ export default function Learn() {
     <div className="learn">
       <header className="bar">
         <Logo />
-        <a className="bar-link" href="#/">
-          Back to home
-        </a>
+        <div className="bar-links">
+          <FeedbackButton />
+          <a className="bar-link" href="#/">
+            Back to home
+          </a>
+        </div>
       </header>
 
       <main className="learn-main">

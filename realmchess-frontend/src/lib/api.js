@@ -90,3 +90,38 @@ export async function api(path, body, game) {
 
 export const legalMovesOf = (coord, game) =>
   api('/game/legal-moves?from=' + encodeURIComponent(JSON.stringify(coord)), undefined, game)
+
+// ---- Not about one game ----
+
+// Tell the server a page was opened ({ page: 'home' }) or something happened ({ event:
+// 'lesson_done' }), for the anonymous play counts. Fire and forget: it never holds up a page.
+export function track(what) {
+  try {
+    const body = JSON.stringify(what)
+    if (navigator.sendBeacon?.('/api/visit', new Blob([body], { type: 'application/json' }))) return
+    fetch('/api/visit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, keepalive: true }).catch(() => {})
+  } catch {
+    // counting is never worth an error
+  }
+}
+
+// Open games waiting for players: { games, playing, phrases }
+export const fetchLobby = () => send('/lobby')
+
+// What a player sends with the Feedback button
+export const sendFeedback = (feedback) => send('/feedback', feedback)
+
+// The admin page, with the key typed there (kept for this tab only)
+const ADMIN_KEY = 'realmchess.admin'
+export const adminKey = () => read(sessionStorage, ADMIN_KEY)
+export const rememberAdminKey = (key) => write(sessionStorage, ADMIN_KEY, key)
+
+async function adminCall(path, body) {
+  const options = body === undefined ? { headers: {} } : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+  const key = adminKey()
+  if (key) options.headers['X-Admin-Key'] = key
+  const response = await fetch('/api' + path, options)
+  return response.json()
+}
+export const fetchAdmin = () => adminCall('/admin')
+export const markFeedback = (id, done) => adminCall('/admin/feedback', { id, done })

@@ -195,8 +195,11 @@ export function useGame(which = 'main', joinSide = null) {
     undo: () => call('/game/undo', {}),
     promote: (pieceType) => call('/game/promote', { coord: game.pending_promotion, piece_type: pieceType }),
     askHint,
-    // Online team games: a message to your teammate, maybe with a move you suggest
-    say: (text, move) => call('/game/say', { text, move }),
+    // Online games: a message to your teammate (to 'team', maybe with a move you suggest) or
+    // to everyone playing ('all')
+    say: (text, move, to = 'team') => call('/game/say', { text, move, to }),
+    // Win an online game the other side has left
+    claim: () => call('/game/claim', {}),
     // Between online players: offer a draw or ask to take a move back, and answer one
     offer: (kind) => call('/game/offer', { kind }),
     answer: (yes) => call('/game/answer', { accept: yes }),

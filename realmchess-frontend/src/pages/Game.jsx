@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
+import Chat from '../components/Chat.jsx'
 import Clock from '../components/Clock.jsx'
 import CubeBoard from '../components/CubeBoard.jsx'
 import Dialog from '../components/Dialog.jsx'
+import { FeedbackForm } from '../components/Feedback.jsx'
 import LayerMap from '../components/LayerMap.jsx'
 import Logo from '../components/Logo.jsx'
 import MoveList from '../components/MoveList.jsx'
 import PlayerCard from '../components/PlayerCard.jsx'
-import TeamChat from '../components/TeamChat.jsx'
 import { FULL_BOARD, LAYERS, capturedBy, capturedPoints, describeMove, keyOf, layerOf, layersOf, otherColor, parsePiece } from '../lib/chess.js'
 import { navigate } from '../lib/router.js'
 import {
@@ -34,6 +35,9 @@ function outcomeOf(game) {
   const wins = !game.winner ? 'Draw' : !you ? `${NAMES[game.winner]} wins` : game.winner === you ? 'You win' : `${rival} wins`
   if (game.status === 'checkmate') return { title: wins, detail: 'Checkmate.' }
   if (game.status === 'resigned') return { title: wins, detail: `${who(otherColor(game.winner))} resigned.` }
+  if (game.status === 'abandoned') {
+    return { title: wins, detail: `${who(otherColor(game.winner))} left the game.` }
+  }
   if (game.status === 'timeout') {
     if (game.winner) return { title: wins, detail: `${who(otherColor(game.winner))} ran out of time.` }
     // The clock only runs for the player to move, so that is who ran out
@@ -72,7 +76,7 @@ const seatName = (seat) => `${NAMES[seat.slice(0, 5)]} ${seatNumber(seat)}`
 export default function Game({ id, joinSide = null }) {
   const {
     game, selected, legalMoves, portalEntries, error, gone, clickCell, newGame, undo, promote, resign, agreeDraw, refresh, computerMove,
-    offer, answer, askHint, say, select, clearSelection,
+    offer, answer, askHint, say, claim, select, clearSelection,
   } = useGame(id, joinSide)
   const [settings, setSettings] = useState(loadSettings)
   const [flipped, setFlipped] = useState(false)
@@ -90,6 +94,7 @@ export default function Game({ id, joinSide = null }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [hint, setHint] = useState(null) // the computer's suggestion: { from, to, version }
   const [thinking, setThinking] = useState(false) // waiting for a hint
+  const [feedbackOpen, setFeedbackOpen] = useState(false)
   const phone = usePhone()
   const waiting = useRef(false)
 
@@ -109,6 +114,10 @@ export default function Game({ id, joinSide = null }) {
   const theirOffer = online?.offer && you && online.offer.by !== you ? online.offer : null
   const myOffer = online?.offer && online.offer.by === you ? online.offer : null
   const link = `${window.location.origin}${window.location.pathname}#/game/${id}`
+  // An open game: listed in the lobby, played with strangers
+  const openGame = !!online?.public
+  // The other side's players who have stopped answering, and since about when
+  const rivalAway = Object.entries(online?.away ?? {}).filter(([seat]) => rival && seat.startsWith(rival))
   // A team game: two players a side take turns with the army. turnSeat is whose turn it is
   // ("black2": Black's second player); mySeat is ours online.
   const teams = !!game?.teams
@@ -276,6 +285,10 @@ export default function Game({ id, joinSide = null }) {
   }
 
   function restart() {
+    if (openGame) {
+      navigate('/lobby') // find another stranger to play
+      return
+    }
     if (online) {
       navigate('/setup') // an online game is replayed by making a new one and sending its link
       return
@@ -355,7 +368,9 @@ export default function Game({ id, joinSide = null }) {
   }
   let turnText = `${NAMES[player]} to move`
   if (online && friendMissing && !watching) {
-    turnText = teams ? 'Waiting for players to join' : phone ? 'Waiting for your friend' : 'Waiting for your friend to join'
+    turnText = teams
+      ? 'Waiting for players to join'
+      : openGame ? 'Waiting for an opponent' : phone ? 'Waiting for your friend' : 'Waiting for your friend to join'
   } else if (computerTurn) turnText = 'The computer is thinking'
   else if (online && !watching) {
     turnText = myTurn ? 'Your move' : player === you ? "Your teammate's move" : teams ? "The other team's move" : "Your opponent's move"
@@ -414,8 +429,11 @@ export default function Game({ id, joinSide = null }) {
   )
   const barActions = (
     <div className="bar-actions">
+      <button type="button" className="button" onClick={() => setFeedbackOpen(true)}>
+        Feedback
+      </button>
       <button type="button" className="button" onClick={restart}>
-        New game
+        {openGame ? 'Find a game' : 'New game'}
       </button>
       <a className="button" href="#/">
         Exit
@@ -462,6 +480,19 @@ export default function Game({ id, joinSide = null }) {
       )}
       {declined === history.length && !outcome && <p className="banner-note">The computer declines the draw.</p>}
       {watching && <p className="banner-note">You are watching this game.</p>}
+      {online?.claimable && !outcome && (
+        <p className="banner-note">
+          {teams ? 'The other team has left the game.' : 'Your opponent has left the game.'}{' '}
+          <button type="button" className="link-button" onClick={claim}>
+            Claim the win
+          </button>
+        </p>
+      )}
+      {!online?.claimable && !outcome && !watching && rivalAway.length > 0 && rivalAway.length === seatsOf(rival).length && (
+        <p className="banner-note">
+          {teams ? 'The other team is' : 'Your opponent is'} not connected. If they are gone for a minute, you can claim the win.
+        </p>
+      )}
       {myOffer && !outcome && (
         <p className="banner-note">
           {teams
@@ -475,7 +506,7 @@ export default function Game({ id, joinSide = null }) {
       )}
       {online && friendMissing && !watching && inviteClosed && (
         <p className="banner-note">
-          {teams ? 'Not everyone has joined yet.' : 'Your friend has not joined yet.'}{' '}
+          {teams ? 'Not everyone has joined yet.' : openGame ? 'Nobody has joined yet.' : 'Your friend has not joined yet.'}{' '}
           <button type="button" className="link-button" onClick={() => setInviteClosed(false)}>
             {teams ? 'Show the links' : 'Show the link'}
           </button>
@@ -527,7 +558,7 @@ export default function Game({ id, joinSide = null }) {
 
       {online && friendMissing && !watching && !inviteClosed && !teams && (
         <Dialog
-          title="Invite your friend"
+          title={openGame ? 'Waiting for an opponent' : 'Invite your friend'}
           actions={
             <>
               <button type="button" className="button button-primary" onClick={() => copyLink(link)}>
@@ -539,7 +570,11 @@ export default function Game({ id, joinSide = null }) {
             </>
           }
         >
-          <p>Send this link. Whoever opens it first plays {NAMES[rival]}; anyone after that can watch.</p>
+          <p>
+            {openGame
+              ? `Your game is in the lobby, where anyone can join it as ${NAMES[rival]}. Keep this page open. You can also send a friend this link.`
+              : `Send this link. Whoever opens it first plays ${NAMES[rival]}; anyone after that can watch.`}
+          </p>
           <input className="invite-link" readOnly value={link} aria-label="Game link" onFocus={(event) => event.target.select()} />
         </Dialog>
       )}
@@ -553,7 +588,10 @@ export default function Game({ id, joinSide = null }) {
             </button>
           }
         >
-          <p>Each link seats whoever opens it on that side, until the side is full. Anyone after that can watch.</p>
+          <p>
+            {openGame ? 'Your game is in the lobby, where anyone can take the free seats. Keep this page open. ' : ''}
+            Each link seats whoever opens it on that side, until the side is full. Anyone after that can watch.
+          </p>
           {[you, rival].filter((color) => freeSeats(color)).map((color) => (
             <div key={color} className="invite-row">
               <label htmlFor={`invite-${color}`}>{color === you ? 'Your teammate' : `The other team (${NAMES[color]})`}</label>
@@ -704,7 +742,7 @@ export default function Game({ id, joinSide = null }) {
           actions={
             <>
               <button type="button" className="button button-primary" onClick={restart}>
-                New game
+                {openGame ? 'Find another game' : 'New game'}
               </button>
               <button type="button" className="button" onClick={() => setResultSeen(true)}>
                 Look at the board
@@ -759,15 +797,20 @@ export default function Game({ id, joinSide = null }) {
       />
     </section>
   )
-  const teamChat = online && teams && !watching && (
-    <TeamChat
+  // Messages: between the players online (a team playing the computer only talks to itself)
+  const teamChat = online && !watching && (teams || !computer) && (
+    <Chat
       messages={online.chat ?? []}
       mySeat={mySeat}
+      teams={teams}
+      toEveryone={!computer}
+      phrases={online.phrases}
       canSuggest={canSuggest}
       describe={(message) => describeMove(board, message.move)}
-      onSay={(text) => say(text)}
+      onSay={(text, to) => say(text, undefined, computer ? 'team' : to)}
     />
   )
+  const feedbackForm = feedbackOpen && <FeedbackForm game={id} onClose={() => setFeedbackOpen(false)} />
   const moveList = (
     <MoveList
       history={history}
@@ -822,6 +865,7 @@ export default function Game({ id, joinSide = null }) {
             {barActions}
           </div>
         )}
+        {feedbackForm}
       </div>
     )
   }
@@ -856,6 +900,7 @@ export default function Game({ id, joinSide = null }) {
           {moveList}
         </aside>
       </main>
+      {feedbackForm}
     </div>
   )
 }

@@ -4,6 +4,7 @@ export const DEFAULT_SETTINGS = {
   opponent: 'local', // 'local' (two players on this screen), 'computer' or 'online'
   teams: false, // two players a side, taking turns with the army
   onlineRival: 'friends', // a team online plays 'friends' (another team) or the 'computer'
+  openGame: false, // an online game open to anyone (listed in the lobby), not just a friend with the link
   level: 'medium', // the computer's level
   side: 'white', // which colour sits nearest the camera; against the computer, the side you play
   rocks: true,

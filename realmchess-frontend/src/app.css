@@ -1883,15 +1883,56 @@ legend {
 
   /* ----- setup ----- */
   .setup-main {
-    padding: 16px 16px 92px;
+    padding: 10px 16px 92px;
   }
 
   .setup-form {
-    gap: 18px;
+    gap: 12px;
   }
 
+  .setup-form legend {
+    margin-bottom: 6px;
+  }
+
+  .setup-form .choice {
+    min-height: 42px;
+    padding: 8px 12px;
+  }
+
+  /* The bar's logo says where you are; the title would only push the form down */
   .setup-form h1 {
-    font-size: 30px;
+    display: none;
+  }
+
+  /* The clock's rules are in the lessons; say only when an entry is wrong */
+  #clock-help:not(.help-error) {
+    display: none;
+  }
+
+  .setup-more summary {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-control);
+    background: var(--surface);
+    cursor: pointer;
+    font-weight: 500;
+    color: var(--soft);
+  }
+
+  .setup-more summary small {
+    font-weight: 400;
+    color: var(--muted);
+  }
+
+  .setup-more[open] summary {
+    margin-bottom: 12px;
+  }
+
+  .setup-more fieldset legend {
+    display: none;
   }
 
   .choices-3 {
@@ -1911,7 +1952,7 @@ legend {
   }
 
   .setup-pair {
-    gap: 18px;
+    gap: 12px;
   }
 
   .setup-preview {

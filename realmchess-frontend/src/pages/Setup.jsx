@@ -4,6 +4,7 @@ import Logo from '../components/Logo.jsx'
 import { OFFLINE, openGame } from '../lib/api.js'
 import { START_BOARD } from '../lib/chess.js'
 import { navigate } from '../lib/router.js'
+import { usePhone } from '../lib/usePhone.js'
 import { CLOCK_PRESETS, LEVELS, clockRequest, computerRequest, levelName, loadSettings, playsComputer, saveSettings } from '../lib/settings.js'
 
 function Choice({ selected, disabled, onClick, title, hint, children }) {
@@ -38,6 +39,7 @@ export default function Setup() {
   const [error, setError] = useState(null)
   const [starting, setStarting] = useState(false)
   const set = (patch) => setSettings((current) => ({ ...current, ...patch }))
+  const phone = usePhone()
 
   const limit = Number(settings.moveLimit)
   const limitValid = Number.isInteger(limit) && limit >= 10 && limit <= 200
@@ -54,6 +56,12 @@ export default function Setup() {
       : clock.mode === 'custom'
         ? `${clock.minutes} min each${increment > 0 ? `, plus ${increment} s a move` : ''}.`
         : `${CLOCK_PRESETS.find((option) => option.mode === clock.mode).label} each.`
+  const rulesSummary = [
+    settings.rocks ? 'Rocks on' : 'Rocks off',
+    settings.showLegalMoves ? 'legal moves shown' : 'legal moves hidden',
+    settings.allowUndo ? 'undo allowed' : 'no undo',
+    `draw after ${settings.moveLimit} quiet moves`,
+  ].join(' · ')
   const previewSide = sideChoice === 'black' ? 'black' : 'white'
   const againstComputer = settings.opponent === 'computer'
   const online = settings.opponent === 'online'
@@ -226,36 +234,76 @@ export default function Setup() {
             </p>
           </fieldset>
 
-          <fieldset>
-            <legend>Rules and help</legend>
-            <div className="switches">
-              <Switch label="Rocks in the dungeon" checked={settings.rocks} onChange={(rocks) => set({ rocks })} />
-              <Switch
-                label="Show legal moves"
-                checked={settings.showLegalMoves}
-                onChange={(showLegalMoves) => set({ showLegalMoves })}
-              />
-              <Switch label="Allow undo" checked={settings.allowUndo} onChange={(allowUndo) => set({ allowUndo })} />
-              <div className="field">
-                <label htmlFor="quiet">Draw after quiet moves</label>
-                <input
-                  id="quiet"
-                  type="number"
-                  min="10"
-                  max="200"
-                  value={settings.moveLimit}
-                  aria-invalid={!limitValid}
-                  aria-describedby="quiet-help"
-                  onChange={(event) => set({ moveLimit: event.target.value })}
+          {phone ? (
+            // On a phone the rules fold into one line, so the page fits the screen
+            <details className="setup-more" open={!limitValid || undefined}>
+              <summary>
+                <span>Rules and help</span>
+                <small>{rulesSummary}</small>
+              </summary>
+              <fieldset>
+                <legend>Rules and help</legend>
+                <div className="switches">
+                  <Switch label="Rocks in the dungeon" checked={settings.rocks} onChange={(rocks) => set({ rocks })} />
+                  <Switch
+                    label="Show legal moves"
+                    checked={settings.showLegalMoves}
+                    onChange={(showLegalMoves) => set({ showLegalMoves })}
+                  />
+                  <Switch label="Allow undo" checked={settings.allowUndo} onChange={(allowUndo) => set({ allowUndo })} />
+                  <div className="field">
+                    <label htmlFor="quiet">Draw after quiet moves</label>
+                    <input
+                      id="quiet"
+                      type="number"
+                      min="10"
+                      max="200"
+                      value={settings.moveLimit}
+                      aria-invalid={!limitValid}
+                      aria-describedby="quiet-help"
+                      onChange={(event) => set({ moveLimit: event.target.value })}
+                    />
+                  </div>
+                </div>
+                <p id="quiet-help" className={`help ${limitValid ? '' : 'help-error'}`}>
+                  {limitValid
+                    ? 'A quiet move has no capture and no pawn move. The game is drawn when both players make this many in a row.'
+                    : 'Enter a whole number from 10 to 200.'}
+                </p>
+              </fieldset>
+            </details>
+          ) : (
+            <fieldset>
+              <legend>Rules and help</legend>
+              <div className="switches">
+                <Switch label="Rocks in the dungeon" checked={settings.rocks} onChange={(rocks) => set({ rocks })} />
+                <Switch
+                  label="Show legal moves"
+                  checked={settings.showLegalMoves}
+                  onChange={(showLegalMoves) => set({ showLegalMoves })}
                 />
+                <Switch label="Allow undo" checked={settings.allowUndo} onChange={(allowUndo) => set({ allowUndo })} />
+                <div className="field">
+                  <label htmlFor="quiet">Draw after quiet moves</label>
+                  <input
+                    id="quiet"
+                    type="number"
+                    min="10"
+                    max="200"
+                    value={settings.moveLimit}
+                    aria-invalid={!limitValid}
+                    aria-describedby="quiet-help"
+                    onChange={(event) => set({ moveLimit: event.target.value })}
+                  />
+                </div>
               </div>
-            </div>
-            <p id="quiet-help" className={`help ${limitValid ? '' : 'help-error'}`}>
-              {limitValid
-                ? 'A quiet move has no capture and no pawn move. The game is drawn when both players make this many in a row.'
-                : 'Enter a whole number from 10 to 200.'}
-            </p>
-          </fieldset>
+              <p id="quiet-help" className={`help ${limitValid ? '' : 'help-error'}`}>
+                {limitValid
+                  ? 'A quiet move has no capture and no pawn move. The game is drawn when both players make this many in a row.'
+                  : 'Enter a whole number from 10 to 200.'}
+              </p>
+            </fieldset>
+          )}
 
           {error && <p className="banner-error">{error}</p>}
 

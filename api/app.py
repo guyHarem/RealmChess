@@ -147,7 +147,7 @@ def start(manager, data):
     """Begin a game in a room from the options the page sent"""
     response = manager.new_game(rocks=bool(data.get("rocks", True)), move_limit=data.get("move_limit", 50),
                                 clock=data.get("clock"), computer=data.get("computer"), portals=data.get("portals"),
-                                dynamite=data.get("dynamite"))
+                                dynamite=data.get("dynamite"), clouds=data.get("clouds"))
     if response.get("success") and response.get("computer") and hasattr(manager._think, "warm_up"):
         manager._think.warm_up()
     return response
@@ -525,7 +525,8 @@ def pages(path):
 def debug_setup():
     """Replace the whole position: {"pieces": [{"coord", "type", "color"}], "current_player", "rocks",
     "size", "z_min", "z_max", "portals"}. The board defaults to the full 8, -2, 2; lessons use
-    5, -1, 1. portals: pairs of cells, [[[x,y,z], [x,y,z]], ...]. dynamite: cells, [[x,y,z], ...]."""
+    5, -1, 1. portals: pairs of cells, [[[x,y,z], [x,y,z]], ...]. dynamite and clouds: cells,
+    [[x,y,z], ...]."""
     data = request.get_json(silent=True) or {}
     try:
         pieces = [{"coord": parse_coord(item["coord"]), "type": item["type"], "color": item.get("color")}
@@ -536,7 +537,7 @@ def debug_setup():
     return sandbox_response(g.manager.setup_position(
         pieces, data.get("current_player", "white"), bool(data.get("rocks", True)),
         size=data.get("size", 8), z_min=data.get("z_min", -2), z_max=data.get("z_max", 2),
-        portals=data.get("portals"), dynamite=data.get("dynamite")))
+        portals=data.get("portals"), dynamite=data.get("dynamite"), clouds=data.get("clouds")))
 
 
 @app.route('/api/debug/place', methods=['POST'])

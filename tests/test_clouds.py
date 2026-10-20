@@ -95,5 +95,48 @@ class TestLayout(unittest.TestCase):
         self.assertEqual(game.board.clouds, {(3, 4, 2)})
 
 
+
+class TestCloudGames(unittest.TestCase):
+    """Through the API: games with clouds (and all the special cells at once), replayed elsewhere"""
+
+    def setUp(self):
+        from api.app import app
+        self.client = app.test_client()
+
+    def open(self, **body):
+        return self.client.post('/api/games', json={"kind": "local", **body}).get_json()
+
+    def test_classic_and_shuffled_clouds(self):
+        from engine.board import CLASSIC_CLOUDS
+        self.assertEqual(sorted(map(tuple, self.open(clouds="classic")["clouds"])), sorted(CLASSIC_CLOUDS))
+        data = self.open(clouds="shuffle", dynamite="shuffle", portals="shuffle")
+        self.assertTrue(data["success"], data.get("error"))
+        clouds = {tuple(cell) for cell in data["clouds"]}
+        self.assertEqual(len(clouds), 4)
+        self.assertEqual({(x, 7 - y, z) for x, y, z in clouds}, clouds)
+        self.assertTrue(all(z > 0 for _, _, z in clouds))
+        portal_cells = {tuple(cell) for pair in data["portals"] for cell in pair}
+        dynamite = {tuple(cell) for cell in data["dynamite"]}
+        self.assertFalse(clouds & portal_cells or clouds & dynamite or dynamite & portal_cells)
+
+    def test_all_classic_cells_together(self):
+        data = self.open(clouds="classic", dynamite="classic", portals="classic")
+        self.assertEqual((len(data["clouds"]), len(data["dynamite"]), len(data["portals"])), (4, 4, 2))
+
+    def test_bad_clouds_are_refused(self):
+        self.assertFalse(self.open(clouds=[[3, 3, 0]])["success"])   # on the Ground
+        self.assertFalse(self.open(clouds="cumulus")["success"])
+
+    def test_a_cloud_game_replays(self):
+        import json
+        from api import handoff
+        from api.rooms import Rooms
+        old, new = Rooms(), Rooms()
+        room = old.create("local")
+        room.manager.new_game(clouds="shuffle")
+        copy = handoff.restore(new, json.loads(json.dumps(handoff.snapshot(room))))
+        self.assertEqual(copy.manager.game.board.clouds, room.manager.game.board.clouds)
+
+
 if __name__ == '__main__':
     unittest.main()

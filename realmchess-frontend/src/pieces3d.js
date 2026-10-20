@@ -161,3 +161,25 @@ export function createDynamite() {
   return group
 }
 
+// A cloud: soft white puffs filling a cell, see-through so a piece sheltering inside shows
+export function createCloud() {
+  const group = new THREE.Group()
+  const material = new THREE.MeshStandardMaterial({
+    color: '#ffffff',
+    roughness: 1,
+    transparent: true,
+    opacity: 0.32,
+    depthWrite: false,
+  })
+  const puffs = [
+    [0, 0.5, 0, 0.36], [-0.22, 0.42, 0.12, 0.24], [0.22, 0.45, -0.1, 0.26],
+    [0.08, 0.66, 0.16, 0.22], [-0.12, 0.62, -0.18, 0.2], [0.24, 0.32, 0.2, 0.18],
+  ]
+  for (const [x, y, z, r] of puffs) {
+    const puff = new THREE.Mesh(new THREE.SphereGeometry(r, 20, 14), material)
+    puff.position.set(x, y, z)
+    group.add(puff)
+  }
+  return group
+}
+

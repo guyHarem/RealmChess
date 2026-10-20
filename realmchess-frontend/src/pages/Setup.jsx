@@ -2,11 +2,11 @@ import { useState } from 'react'
 import CubeBoard from '../components/CubeBoard.jsx'
 import Logo from '../components/Logo.jsx'
 import { OFFLINE, openGame } from '../lib/api.js'
-import { CLASSIC_DYNAMITE, CLASSIC_PORTALS, START_BOARD } from '../lib/chess.js'
+import { CLASSIC_CLOUDS, CLASSIC_DYNAMITE, CLASSIC_PORTALS, START_BOARD } from '../lib/chess.js'
 import { navigate } from '../lib/router.js'
 import { usePhone } from '../lib/usePhone.js'
 import {
-  CLOCK_PRESETS, LEVELS, PORTAL_CHOICES, clockRequest, computerRequest, dynamiteRequest, levelName, loadSettings, playsComputer,
+  CLOCK_PRESETS, LEVELS, PORTAL_CHOICES, clockRequest, cloudRequest, computerRequest, dynamiteRequest, levelName, loadSettings, playsComputer,
   portalRequest, saveSettings,
 } from '../lib/settings.js'
 
@@ -59,13 +59,16 @@ export default function Setup() {
       : clock.mode === 'custom'
         ? `${clock.minutes} min each${increment > 0 ? `, plus ${increment} s a move` : ''}.`
         : `${CLOCK_PRESETS.find((option) => option.mode === clock.mode).label} each.`
+  // One short line: only the special cells that are on ("shuffled" when they are)
+  const specials = ['portals', 'dynamite', 'clouds']
+    .filter((name) => settings[name] !== 'off')
+    .map((name) => (settings[name] === 'shuffle' ? `shuffled ${name}` : name))
   const rulesSummary = [
-    settings.rocks ? 'Rocks on' : 'Rocks off',
-    settings.portals === 'off' ? 'no portals' : `${settings.portals} portals`,
-    settings.dynamite === 'off' ? 'no dynamite' : `${settings.dynamite} dynamite`,
-    settings.showLegalMoves ? 'legal moves shown' : 'legal moves hidden',
-    settings.allowUndo ? 'undo allowed' : 'no undo',
-    `draw after ${settings.moveLimit} quiet moves`,
+    settings.rocks ? 'Rocks' : 'No rocks',
+    ...specials,
+    settings.showLegalMoves ? 'moves shown' : 'moves hidden',
+    settings.allowUndo ? 'undo' : 'no undo',
+    `draw at ${settings.moveLimit}`,
   ].join(' · ')
   const previewSide = sideChoice === 'black' ? 'black' : 'white'
   const againstComputer = settings.opponent === 'computer'
@@ -91,6 +94,7 @@ export default function Setup() {
         computer: computerRequest(settings, side) ?? undefined,
         portals: portalRequest(settings),
         dynamite: dynamiteRequest(settings),
+        clouds: cloudRequest(settings),
       })
       if (!data.success) throw new Error(data.error)
       saveSettings({ ...settings, side, moveLimit: limit })
@@ -236,7 +240,7 @@ export default function Setup() {
             )}
             <p id="clock-help" className={`help ${clockValid ? '' : 'help-error'}`}>
               {clockValid
-                ? 'Each clock runs only on that player\'s turn and starts after White\'s first move. Run out of time and you lose.'
+                ? 'A clock runs only on its player\'s turn, from White\'s first move. Run out and you lose.'
                 : 'Minutes from 1 to 180, added seconds a whole number from 0 to 60.'}
             </p>
           </fieldset>
@@ -252,6 +256,90 @@ export default function Setup() {
                 <legend>Rules and help</legend>
                 <div className="switches">
                   <Switch label="Rocks in the dungeon" checked={settings.rocks} onChange={(rocks) => set({ rocks })} />
+                  <Switch
+                    label="Show legal moves"
+                    checked={settings.showLegalMoves}
+                    onChange={(showLegalMoves) => set({ showLegalMoves })}
+                  />
+                  <Switch label="Allow undo" checked={settings.allowUndo} onChange={(allowUndo) => set({ allowUndo })} />
+                  <div className="field">
+                    <label htmlFor="quiet">Draw after quiet moves</label>
+                    <input
+                      id="quiet"
+                      type="number"
+                      min="10"
+                      max="200"
+                      value={settings.moveLimit}
+                      aria-invalid={!limitValid}
+                      aria-describedby="quiet-help"
+                      onChange={(event) => set({ moveLimit: event.target.value })}
+                    />
+                  </div>
+                  <div className="special-cells">
+                    <div className="field">
+                      <label htmlFor="portals">Portals</label>
+                      <select id="portals" value={settings.portals} onChange={(event) => set({ portals: event.target.value })}>
+                        {PORTAL_CHOICES.map((choice) => (
+                          <option key={choice.id} value={choice.id}>
+                            {choice.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="field">
+                      <label htmlFor="dynamite">Dynamite</label>
+                      <select id="dynamite" value={settings.dynamite} onChange={(event) => set({ dynamite: event.target.value })}>
+                        {PORTAL_CHOICES.map((choice) => (
+                          <option key={choice.id} value={choice.id}>
+                            {choice.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="field">
+                      <label htmlFor="clouds">Clouds</label>
+                      <select id="clouds" value={settings.clouds} onChange={(event) => set({ clouds: event.target.value })}>
+                        {PORTAL_CHOICES.map((choice) => (
+                          <option key={choice.id} value={choice.id}>
+                            {choice.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+                <p id="quiet-help" className={`help ${limitValid ? '' : 'help-error'}`}>
+                  {limitValid
+                    ? 'Drawn when both make this many moves in a row with no capture or pawn move.'
+                    : 'Enter a whole number from 10 to 200.'}
+                </p>
+              </fieldset>
+            </details>
+          ) : (
+            <fieldset>
+              <legend>Rules and help</legend>
+              <div className="switches">
+                <Switch label="Rocks in the dungeon" checked={settings.rocks} onChange={(rocks) => set({ rocks })} />
+                <Switch
+                  label="Show legal moves"
+                  checked={settings.showLegalMoves}
+                  onChange={(showLegalMoves) => set({ showLegalMoves })}
+                />
+                <Switch label="Allow undo" checked={settings.allowUndo} onChange={(allowUndo) => set({ allowUndo })} />
+                <div className="field">
+                  <label htmlFor="quiet">Draw after quiet moves</label>
+                  <input
+                    id="quiet"
+                    type="number"
+                    min="10"
+                    max="200"
+                    value={settings.moveLimit}
+                    aria-invalid={!limitValid}
+                    aria-describedby="quiet-help"
+                    onChange={(event) => set({ moveLimit: event.target.value })}
+                  />
+                </div>
+                <div className="special-cells">
                   <div className="field">
                     <label htmlFor="portals">Portals</label>
                     <select id="portals" value={settings.portals} onChange={(event) => set({ portals: event.target.value })}>
@@ -272,81 +360,21 @@ export default function Setup() {
                       ))}
                     </select>
                   </div>
-                  <Switch
-                    label="Show legal moves"
-                    checked={settings.showLegalMoves}
-                    onChange={(showLegalMoves) => set({ showLegalMoves })}
-                  />
-                  <Switch label="Allow undo" checked={settings.allowUndo} onChange={(allowUndo) => set({ allowUndo })} />
                   <div className="field">
-                    <label htmlFor="quiet">Draw after quiet moves</label>
-                    <input
-                      id="quiet"
-                      type="number"
-                      min="10"
-                      max="200"
-                      value={settings.moveLimit}
-                      aria-invalid={!limitValid}
-                      aria-describedby="quiet-help"
-                      onChange={(event) => set({ moveLimit: event.target.value })}
-                    />
+                    <label htmlFor="clouds">Clouds</label>
+                    <select id="clouds" value={settings.clouds} onChange={(event) => set({ clouds: event.target.value })}>
+                      {PORTAL_CHOICES.map((choice) => (
+                        <option key={choice.id} value={choice.id}>
+                          {choice.label}
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                </div>
-                <p id="quiet-help" className={`help ${limitValid ? '' : 'help-error'}`}>
-                  {limitValid
-                    ? 'A quiet move has no capture and no pawn move. The game is drawn when both players make this many in a row.'
-                    : 'Enter a whole number from 10 to 200.'}
-                </p>
-              </fieldset>
-            </details>
-          ) : (
-            <fieldset>
-              <legend>Rules and help</legend>
-              <div className="switches">
-                <Switch label="Rocks in the dungeon" checked={settings.rocks} onChange={(rocks) => set({ rocks })} />
-                <div className="field">
-                  <label htmlFor="portals">Portals</label>
-                  <select id="portals" value={settings.portals} onChange={(event) => set({ portals: event.target.value })}>
-                    {PORTAL_CHOICES.map((choice) => (
-                      <option key={choice.id} value={choice.id}>
-                        {choice.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="field">
-                  <label htmlFor="dynamite">Dynamite</label>
-                  <select id="dynamite" value={settings.dynamite} onChange={(event) => set({ dynamite: event.target.value })}>
-                    {PORTAL_CHOICES.map((choice) => (
-                      <option key={choice.id} value={choice.id}>
-                        {choice.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <Switch
-                  label="Show legal moves"
-                  checked={settings.showLegalMoves}
-                  onChange={(showLegalMoves) => set({ showLegalMoves })}
-                />
-                <Switch label="Allow undo" checked={settings.allowUndo} onChange={(allowUndo) => set({ allowUndo })} />
-                <div className="field">
-                  <label htmlFor="quiet">Draw after quiet moves</label>
-                  <input
-                    id="quiet"
-                    type="number"
-                    min="10"
-                    max="200"
-                    value={settings.moveLimit}
-                    aria-invalid={!limitValid}
-                    aria-describedby="quiet-help"
-                    onChange={(event) => set({ moveLimit: event.target.value })}
-                  />
                 </div>
               </div>
               <p id="quiet-help" className={`help ${limitValid ? '' : 'help-error'}`}>
                 {limitValid
-                  ? 'A quiet move has no capture and no pawn move. The game is drawn when both players make this many in a row.'
+                  ? 'Drawn when both make this many moves in a row with no capture or pawn move.'
                   : 'Enter a whole number from 10 to 200.'}
               </p>
             </fieldset>
@@ -372,6 +400,7 @@ export default function Setup() {
               side={previewSide}
               portals={settings.portals === 'classic' ? CLASSIC_PORTALS : []}
               dynamite={settings.dynamite === 'classic' ? CLASSIC_DYNAMITE : []}
+              clouds={settings.clouds === 'classic' ? CLASSIC_CLOUDS : []}
             />
           </div>
           <p className="setup-summary">
@@ -421,6 +450,7 @@ export default function Setup() {
             {clockSummary} {settings.rocks ? 'Rocks on.' : 'Rocks off.'}{' '}
             {{ off: '', classic: 'Portals: two linked pairs, Sky to Dungeon.', shuffle: 'Portals in random places, the same for both sides.' }[settings.portals]}{' '}
             {{ off: '', classic: 'Dynamite: four charges in the Sky and the Dungeon.', shuffle: 'Dynamite in random places, the same for both sides.' }[settings.dynamite]}{' '}
+            {{ off: '', classic: 'Clouds: four shelters in Space and the Sky.', shuffle: 'Clouds in random places, the same for both sides.' }[settings.clouds]}{' '}
             {settings.allowUndo ? 'Undo allowed.' : 'No undo.'}
           </p>
         </aside>

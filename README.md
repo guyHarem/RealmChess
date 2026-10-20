@@ -27,7 +27,7 @@ It was called CubeChess until October 2026. Play it at [realmchess.com](https://
 - ✅ Home page, game setup and the game screen (local two-player)
 - ✅ Three.js 3D board: cube-shaped cells, 3D pieces, layer tools, camera controls
 - ✅ Move list, captured material, chess clock with increment, undo, resign and draw by agreement
-- ✅ Lesson player: twelve lessons on a 5×5 board (three layers; the edge-pawn lesson has all five), including portals and dynamite (`realmchess-frontend/src/lessons.json`)
+- ✅ Lesson player: thirteen lessons on a 5×5 board (three layers; the edge-pawn lesson has all five), including portals, dynamite and clouds (`realmchess-frontend/src/lessons.json`)
 - ✅ Scenario player: 32 checkmate puzzles in four tiers (`realmchess-frontend/src/scenarios.json`)
 - ✅ Play against the computer (easy, medium, hard), with the last move marked on the board
 - ✅ Online play with a link: seats without accounts, draw and take-back offers, watching
@@ -87,6 +87,12 @@ layer and the ones above and below) is removed, the mover too, but kings survive
 are destroyed and other dynamite there goes off as well; the board stays whole. Passing over
 dynamite does nothing, and a pawn can step onto it but not capture onto it. A move whose blast
 would leave your king in check is not allowed. Notation marks a blast with ✸ (`Rc3✸`).
+
+**Clouds (optional):** shelter cells in Space and the Sky, switched on at setup: **Classic**
+(Space c4 and Sky f4, mirrored to Space c5 and Sky f5) or **Shuffle** (two random clouds,
+mirrored). A piece inside a cloud can't be captured or blown up by dynamite, but it can't
+capture or give check either; its attacks don't count. Kings can't enter a cloud, and sliding
+pieces and double steps can't pass through one, empty or not.
 
 **Square colors:** the checkered pattern shifts by one square on every other layer, so a bishop
 keeps its color when it changes layer. The top-down view shows chess coordinates (a-h, 1-8).
@@ -262,7 +268,7 @@ The test bench edits positions through sandbox endpoints that are for testing on
 | `/api/game/join` | POST | Online: take a free seat (optional `{"side"}`), or watch |
 | `/api/game/offer` | POST | Online: offer a draw or ask to take a move back |
 | `/api/game/answer` | POST | Online: accept, decline or withdraw the offer |
-| `/api/game/new` | POST | Start a new game in the same room. Optional body: `{"rocks": true, "move_limit": 50, "clock": {"initial": 600, "increment": 5}, "computer": {"color": "black", "level": "hard"}, "portals": "classic", "dynamite": "shuffle"}`. portals: `"classic"`, `"shuffle"` or the pairs `[[[x,y,z],[x,y,z]], ...]`; dynamite: `"classic"`, `"shuffle"` or the cells; every game answer lists them as `portals` and `dynamite` (the charges left), and a blast's history entry has `blast` (what it removed) and `charges` |
+| `/api/game/new` | POST | Start a new game in the same room. Optional body: `{"rocks": true, "move_limit": 50, "clock": {"initial": 600, "increment": 5}, "computer": {"color": "black", "level": "hard"}, "portals": "classic", "dynamite": "shuffle"}`. portals: `"classic"`, `"shuffle"` or the pairs `[[[x,y,z],[x,y,z]], ...]`; dynamite and clouds: `"classic"`, `"shuffle"` or the cells; every game answer lists them as `portals`, `dynamite` (the charges left) and `clouds`, and a blast's history entry has `blast` (what it removed) and `charges` |
 | `/api/game/state` | GET | Get current board state |
 | `/api/game/move` | POST | Execute a move |
 | `/api/game/legal-moves` | GET | Get legal moves for piece: the cells it lands on, and `portal_entries`, the portals it can step into |
@@ -432,13 +438,11 @@ This project is built with a learning-first approach:
 
 ## Next Steps
 
-1. More special cells, each a setup option like portals and dynamite:
-   - **Clouds** (Space and the Sky only): visible shelter; a piece inside cannot be captured,
-     but cannot capture or give check either; kings cannot enter; sliders cannot pass through
-2. Then tune every layout together with self-play (the classic portals and dynamite are stand-ins): no trip
-   or blast on the first move, and special cells that come into play within a few moves
-3. Get real players: share the link, try 2 against 2, and see what confuses newcomers
-4. Later, once people play: accounts, ratings and finding an opponent; games that survive a
+1. Tune every special-cell layout together with self-play (the classic portals, dynamite and
+   clouds are stand-ins): nothing triggered on the first move, and special cells that come into
+   play within a few moves
+2. Get real players: share the link, try 2 against 2, and see what confuses newcomers
+3. Later, once people play: accounts, ratings and finding an opponent; games that survive a
    crash (needs storage that outlives the server, which costs extra on Render)
 
 ---

@@ -6,7 +6,7 @@ import { OrbitControls } from '@react-three/drei'
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import { PORTAL_COLORS, boardItems, isDarkSquare, keyOf, layerOf, sameCoord } from '../lib/chess.js'
-import { createDynamite, createMoveBall, createPiece, createRock } from '../pieces3d.js'
+import { createCloud, createDynamite, createMoveBall, createPiece, createRock } from '../pieces3d.js'
 
 const FLAT = [-Math.PI / 2, 0, 0]
 const SPREAD_GAP = 1.15 // extra space between layers when they are spread apart
@@ -258,6 +258,11 @@ function Flash({ position }) {
   )
 }
 
+function Cloud({ position }) {
+  const object = useMemo(() => createCloud(), [])
+  return <primitive object={object} position={position} raycast={NO_HITS} />
+}
+
 function Dynamite({ position }) {
   const object = useMemo(() => createDynamite(), [])
   return <primitive object={object} position={position} raycast={NO_HITS} />
@@ -456,6 +461,7 @@ function Scene({
   glides,
   portals,
   dynamite,
+  clouds,
   check,
   suggestion,
   showMoveBalls,
@@ -549,6 +555,9 @@ function Scene({
         />
       )}
       {check && visible(check[2]) && <CheckPulse position={cellPosition(check)} />}
+      {clouds.filter((cell) => visible(cell[2])).map((cell) => (
+        <Cloud key={`cloud-${keyOf(cell)}`} position={cellPosition(cell)} />
+      ))}
       {dynamite.filter((cell) => visible(cell[2])).map((cell) => (
         <Dynamite key={`dynamite-${keyOf(cell)}`} position={cellPosition(cell)} />
       ))}
@@ -614,6 +623,7 @@ export default function CubeBoard({
   glides = null, // [{ from, to }]: pieces that have just arrived and where they came from (default: lastMove)
   portals = [], // pairs of linked cells
   dynamite = [], // cells with a charge left
+  clouds = [], // shelter cells
   check = null, // the cell of a king in check
   suggestion = null, // { from, to }: a move suggested by a hint or a teammate
   showMoveBalls = true,
@@ -643,6 +653,7 @@ export default function CubeBoard({
         glides={glides}
         portals={portals}
         dynamite={dynamite}
+        clouds={clouds}
         check={check}
         suggestion={suggestion}
         showMoveBalls={showMoveBalls}

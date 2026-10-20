@@ -9,7 +9,9 @@ import PlayerCard from '../components/PlayerCard.jsx'
 import TeamChat from '../components/TeamChat.jsx'
 import { FULL_BOARD, LAYERS, capturedBy, capturedPoints, describeMove, keyOf, layerOf, layersOf, otherColor, parsePiece } from '../lib/chess.js'
 import { navigate } from '../lib/router.js'
-import { clockRequest, computerRequest, dynamiteRequest, levelName, loadSettings, portalRequest, saveSettings } from '../lib/settings.js'
+import {
+  clockRequest, cloudRequest, computerRequest, dynamiteRequest, levelName, loadSettings, portalRequest, saveSettings,
+} from '../lib/settings.js'
 import { playSound } from '../lib/sound.js'
 import { useGame } from '../lib/useGame.js'
 import { usePhone } from '../lib/usePhone.js'
@@ -147,6 +149,7 @@ export default function Game({ id, joinSide = null }) {
   const size = game?.board_size?.size ?? FULL_BOARD.size
   const portals = game?.portals ?? []
   const dynamite = game?.dynamite ?? []
+  const clouds = game?.clouds ?? []
   // The selected piece's moves, and the portals it can step into, which lead to some of them
   const shownMoves = portalEntries.length ? [...legalMoves, ...portalEntries] : legalMoves
   // What glides on the 3D board: the move just played (with the rook when castling), or after
@@ -286,6 +289,7 @@ export default function Game({ id, joinSide = null }) {
       clock: clockRequest(settings.clock),
       portals: portalRequest(settings),
       dynamite: dynamiteRequest(settings),
+      clouds: cloudRequest(settings),
       computer: computerRequest(settings),
     })
   }
@@ -508,6 +512,7 @@ export default function Game({ id, joinSide = null }) {
         legalMoves={shownMoves}
         portals={portals}
         dynamite={dynamite}
+        clouds={clouds}
         lastMove={lastMove}
         glides={glides}
         check={check}
@@ -746,6 +751,7 @@ export default function Game({ id, joinSide = null }) {
         legalMoves={shownMoves}
         portals={portals}
         dynamite={dynamite}
+        clouds={clouds}
         lastMove={lastMove}
         suggestion={suggestion}
         showMoves={settings.showLegalMoves}

@@ -9,6 +9,7 @@ export const DEFAULT_SETTINGS = {
   rocks: true,
   portals: 'off', // 'off', 'classic' (the designed layout) or 'shuffle' (random, mirrored)
   dynamite: 'off', // the same three choices
+  clouds: 'off', // the same three choices
   showLegalMoves: true,
   allowUndo: true,
   sound: true,
@@ -50,6 +51,7 @@ export const PORTAL_CHOICES = [ // also the dynamite choices
 // The portal and dynamite parts of a "new game" request
 export const portalRequest = (settings) => (settings.portals === 'off' ? undefined : settings.portals)
 export const dynamiteRequest = (settings) => (settings.dynamite === 'off' ? undefined : settings.dynamite)
+export const cloudRequest = (settings) => (settings.clouds === 'off' ? undefined : settings.clouds)
 
 // The clock part of a "new game" request: null for no clock, else seconds
 export function clockRequest(clock) {

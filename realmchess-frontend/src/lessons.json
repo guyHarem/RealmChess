@@ -284,6 +284,40 @@
       ]
     },
     {
+      "id": "clouds",
+      "title": "Clouds",
+      "text": "Some games have clouds in Space and the Sky. A piece inside a cloud can't be captured or blown up, but it can't capture or give check either: it only waits. Kings can't go into a cloud, and sliding pieces can't pass through one. Clouds are off unless you switch them on when you set up a game.",
+      "steps": [
+        {
+          "task": "The rook is after your knight. Hide the knight in the cloud.",
+          "layer": 1,
+          "clouds": [[3, 3, 1]],
+          "pieces": [
+            { "coord": [2, 1, 1], "type": "Knight", "color": "white" },
+            { "coord": [2, 4, 1], "type": "Rook", "color": "black" }
+          ],
+          "from": [2, 1, 1],
+          "to": [3, 3, 1],
+          "expect": "move",
+          "done": "Safe in the cloud. From there it attacks nothing, so it must come out to fight again."
+        },
+        {
+          "task": "The black queen shelters in the cloud beside your rook. She can't be taken, so take the knight instead.",
+          "layer": 1,
+          "clouds": [[1, 2, 1]],
+          "pieces": [
+            { "coord": [0, 2, 1], "type": "Rook", "color": "white" },
+            { "coord": [1, 2, 1], "type": "Queen", "color": "black" },
+            { "coord": [0, 4, 1], "type": "Knight", "color": "black" }
+          ],
+          "from": [0, 2, 1],
+          "to": [0, 4, 1],
+          "expect": "capture",
+          "done": "The queen next door could do nothing to the rook, and the rook nothing to her."
+        }
+      ]
+    },
+    {
       "id": "rocks",
       "title": "Rocks in the dungeon",
       "text": "Rocks never move and can never be captured. They block rooks, bishops and queens. A knight jumps straight over them.",

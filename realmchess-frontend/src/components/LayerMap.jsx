@@ -6,7 +6,7 @@ import PieceIcon from './PieceIcon.jsx'
 const FILES = 'abcdefgh'
 
 export default function LayerMap({
-  board, size, z, side, selected, legalMoves, goal, lastMove, suggestion = null, portals = [], dynamite = [],
+  board, size, z, side, selected, legalMoves, goal, lastMove, suggestion = null, portals = [], dynamite = [], clouds = [],
   showMoves = true, onCellClick,
 }) {
   const layer = layerOf(z)
@@ -32,6 +32,7 @@ export default function LayerMap({
             const portal = portalAt[keyOf(coord)]
             const portalName = portal && `portal ${PORTAL_NAMES[portal.pair] ?? portal.pair + 1}`
             const charge = dynamite.some((cell) => sameCoord(cell, coord))
+            const cloud = clouds.some((cell) => sameCoord(cell, coord))
             const classes = ['map-cell']
             if (sameCoord(selected, coord)) classes.push('is-selected')
             if (legal && piece) classes.push('is-capture')
@@ -46,7 +47,7 @@ export default function LayerMap({
                 type="button"
                 className={classes.join(' ')}
                 style={{ backgroundColor: isDarkSquare(x, y, z) ? layer.dark : layer.light }}
-                aria-label={`${FILES[x]}${y + 1} on ${layer.name}${portal ? `, ${portalName}` : ''}${charge ? ', dynamite' : ''}${piece ? `, ${piece.color ?? ''} ${piece.type}` : ''}`}
+                aria-label={`${FILES[x]}${y + 1} on ${layer.name}${portal ? `, ${portalName}` : ''}${charge ? ', dynamite' : ''}${cloud ? ', cloud' : ''}${piece ? `, ${piece.color ?? ''} ${piece.type}` : ''}`}
                 onClick={() => onCellClick(coord)}
               >
                 {portal && (
@@ -57,6 +58,7 @@ export default function LayerMap({
                   </span>
                 )}
                 {charge && <span className="map-dynamite" aria-hidden="true">{BLAST_MARK}</span>}
+                {cloud && <span className="map-cloud" aria-hidden="true" />}
                 {piece?.type === 'Rock' && <span className="map-rock" />}
                 {piece && piece.type !== 'Rock' && <PieceIcon type={piece.type} color={piece.color} size={26} />}
                 {legal && !piece && showMoves && <span className="map-dot" />}

@@ -6,7 +6,8 @@ import LayerMap from '../components/LayerMap.jsx'
 import Logo from '../components/Logo.jsx'
 import MoveList from '../components/MoveList.jsx'
 import PlayerCard from '../components/PlayerCard.jsx'
-import { FULL_BOARD, LAYERS, capturedBy, capturedPoints, keyOf, layerOf, layersOf, otherColor, parsePiece } from '../lib/chess.js'
+import TeamChat from '../components/TeamChat.jsx'
+import { FULL_BOARD, LAYERS, capturedBy, capturedPoints, describeMove, keyOf, layerOf, layersOf, otherColor, parsePiece } from '../lib/chess.js'
 import { navigate } from '../lib/router.js'
 import { clockRequest, computerRequest, levelName, loadSettings, saveSettings } from '../lib/settings.js'
 import { playSound } from '../lib/sound.js'
@@ -60,7 +61,7 @@ const seatName = (seat) => `${NAMES[seat.slice(0, 5)]} ${seatNumber(seat)}`
 export default function Game({ id, joinSide = null }) {
   const {
     game, selected, legalMoves, error, gone, clickCell, newGame, undo, promote, resign, agreeDraw, refresh, computerMove,
-    offer, answer,
+    offer, answer, askHint, say, select, clearSelection,
   } = useGame(id, joinSide)
   const [settings, setSettings] = useState(loadSettings)
   const [flipped, setFlipped] = useState(false)
@@ -76,6 +77,8 @@ export default function Game({ id, joinSide = null }) {
   const [inviteClosed, setInviteClosed] = useState(false)
   const [copied, setCopied] = useState(null) // the link last copied
   const [menuOpen, setMenuOpen] = useState(false)
+  const [hint, setHint] = useState(null) // the computer's suggestion: { from, to, version }
+  const [thinking, setThinking] = useState(false) // waiting for a hint
   const phone = usePhone()
   const waiting = useRef(false)
 
@@ -104,6 +107,17 @@ export default function Game({ id, joinSide = null }) {
   const freeSeats = (color) => Object.entries(online?.seats ?? {}).some(([seat, taken]) => !taken && seat.startsWith(color))
   // Who is up within a team: online and on one screen "White 2"; with the computer "Player 2"
   const turnName = computer ? `Player ${seatNumber(turnSeat)}` : seatName(turnSeat)
+  // Online team games: on your teammate's turn you may suggest a move rather than play one
+  const canSuggest = !!online && teams && !watching && !outcome && player === you && !myTurn && !game?.pending_promotion
+  // A suggestion only counts for the position it was made in: a hint you asked for, or
+  // (on your turn) the latest move your teammate suggested
+  const shownHint = hint && game && hint.version === game.version ? hint : null
+  const teammateIdea = myTurn && online && teams
+    ? [...(online.chat ?? [])].reverse().find((message) => message.move && message.seat !== mySeat && message.version === game?.version)?.move ?? null
+    : null
+  const suggestion = shownHint ?? teammateIdea
+  // Hints: against the computer and on one screen, never between people online
+  const hintsAllowed = !!game && (!online || !!computer) && !watching
   // Our side sits nearest the camera, unless the view has been flipped
   const mine = you ?? human ?? settings.side
   const side = flipped ? otherColor(mine) : mine
@@ -184,12 +198,39 @@ export default function Game({ id, joinSide = null }) {
   }, [computerTurn, history.length, attempt, computerMove])
 
   function onCellClick(coord) {
+    if (canSuggest) {
+      suggestWith(coord)
+      return
+    }
     if (outcome || computerTurn || !myTurn) return
     // Picking up a piece on another layer brings that layer forward
     const piece = parsePiece(board[keyOf(coord)])
     const isTarget = legalMoves.some((move) => keyOf(move) === keyOf(coord))
     if (!isTarget && piece?.color === player) setActiveLayer(coord[2])
     clickCell(coord)
+  }
+
+  // On a teammate's turn, picking a piece and a square suggests that move instead of playing it
+  function suggestWith(coord) {
+    if (selected && legalMoves.some((move) => keyOf(move) === keyOf(coord))) {
+      say('', { from: selected, to: coord })
+      return
+    }
+    const piece = parsePiece(board[keyOf(coord)])
+    if (piece?.color === you && keyOf(coord) !== keyOf(selected ?? [])) {
+      setActiveLayer(coord[2])
+      select(coord)
+    } else clearSelection()
+  }
+
+  async function showHint() {
+    setThinking(true)
+    const data = await askHint()
+    setThinking(false)
+    if (data?.hint) {
+      setHint(data.hint)
+      setActiveLayer(data.hint.from[2])
+    }
   }
 
   function restart() {
@@ -338,6 +379,16 @@ export default function Game({ id, joinSide = null }) {
   )
   const actionButtons = (
     <>
+      {hintsAllowed && (
+        <button
+          type="button"
+          className="button button-hint"
+          disabled={thinking || !!outcome || computerTurn || !myTurn || !!game.pending_promotion || !!shownHint}
+          onClick={showHint}
+        >
+          {thinking ? 'Thinking…' : 'Hint'}
+        </button>
+      )}
       <div className="button-grid">
         <button type="button" className="button" disabled={undoDisabled} onClick={takeBack}>
           {online && !computer ? 'Ask to take back' : 'Undo move'}
@@ -360,6 +411,10 @@ export default function Game({ id, joinSide = null }) {
   )
   const notices = (
     <>
+      {shownHint && <p className="banner-hint">Hint: {describeMove(board, shownHint)}.</p>}
+      {teammateIdea && !shownHint && (
+        <p className="banner-hint">Your teammate suggests {describeMove(board, teammateIdea)}.</p>
+      )}
       {declined === history.length && !outcome && <p className="banner-note">The computer declines the draw.</p>}
       {watching && <p className="banner-note">You are watching this game.</p>}
       {myOffer && !outcome && (
@@ -412,6 +467,7 @@ export default function Game({ id, joinSide = null }) {
         legalMoves={legalMoves}
         lastMove={lastMove}
         check={check}
+        suggestion={suggestion}
         showMoveBalls={settings.showLegalMoves}
         spread={spread}
         solo={solo}
@@ -645,10 +701,20 @@ export default function Game({ id, joinSide = null }) {
         selected={selected}
         legalMoves={legalMoves}
         lastMove={lastMove}
+        suggestion={suggestion}
         showMoves={settings.showLegalMoves}
         onCellClick={onCellClick}
       />
     </section>
+  )
+  const teamChat = online && teams && !watching && (
+    <TeamChat
+      messages={online.chat ?? []}
+      mySeat={mySeat}
+      canSuggest={canSuggest}
+      describe={(message) => describeMove(board, message.move)}
+      onSay={(text) => say(text)}
+    />
   )
   const moveList = <MoveList history={history} currentPlayer={player} finished={!!outcome} />
 
@@ -690,6 +756,7 @@ export default function Game({ id, joinSide = null }) {
               </button>
             </div>
             <div className="game-actions">{actionButtons}</div>
+            {teamChat}
             {viewControls}
             {moveList}
             {barActions}
@@ -725,6 +792,7 @@ export default function Game({ id, joinSide = null }) {
 
         <aside className="game-right">
           {topView}
+          {teamChat}
           {moveList}
         </aside>
       </main>

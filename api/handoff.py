@@ -76,7 +76,7 @@ def snapshot(room):
             "seats": dict(room.seats),
             "teams": room.teams,
             "chat": [dict(message, move=None if message["move"] is None else
-                          {"from": list(message["move"]["from"]), "to": list(message["move"]["to"])})
+                          dict(message["move"], **{"from": list(message["move"]["from"]), "to": list(message["move"]["to"])}))
                      for message in room.chat],
             "offer": dict(room.offer) if room.offer is not None else None,
             "options": manager.options,
@@ -121,7 +121,8 @@ def restore(rooms, data):
             room.seats = dict(data["seats"])
             room.teams = bool(data.get("teams"))
             room.chat = [dict(message, move=None if message.get("move") is None else
-                              {"from": tuple(message["move"]["from"]), "to": tuple(message["move"]["to"])},
+                              dict(message["move"], **{"from": tuple(message["move"]["from"]),
+                                                       "to": tuple(message["move"]["to"])}),
                               version=message["version"] + 1)
                          for message in data.get("chat", [])]
             room._said = max((message["id"] for message in room.chat), default=0)

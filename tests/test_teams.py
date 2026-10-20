@@ -110,7 +110,8 @@ class TestTeamTalk(TeamTestCase):
         said = white2.post('/api/game/say', {"move": {"from": [6, 0, 0], "to": [5, 2, 0]}}).get_json()
         self.assertTrue(said["success"], said.get("error"))
         message = white.state()["online"]["chat"][-1]
-        self.assertEqual((message["move"], message["version"]), ({"from": [6, 0, 0], "to": [5, 2, 0]}, said["version"]))
+        self.assertEqual((message["move"], message["version"]),
+                         ({"from": [6, 0, 0], "to": [5, 2, 0], "piece": "Knight"}, said["version"]))
         refused = white2.post('/api/game/say', {"move": {"from": [6, 0, 0], "to": [6, 2, 0]}}).get_json()
         self.assertEqual(refused["error"], "That move cannot be played now")
         refused = black.post('/api/game/say', {"move": {"from": [6, 7, 0], "to": [5, 5, 0]}}).get_json()

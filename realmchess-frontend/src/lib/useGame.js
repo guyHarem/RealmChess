@@ -125,6 +125,19 @@ export function useGame(which = 'main', joinSide = null) {
     }
   }, [which, accept])
 
+  // The computer's suggestion for the player to move. Its answer carries the game too.
+  const askHint = useCallback(async () => {
+    try {
+      const data = await api('/game/hint', {}, which)
+      accept(data)
+      setError(data.success || data.busy || data.slow_down ? null : data.error)
+      return data
+    } catch {
+      setError(OFFLINE)
+      return null
+    }
+  }, [which, accept])
+
   const select = useCallback(async (coord) => {
     try {
       const data = await legalMovesOf(coord, which)
@@ -168,6 +181,9 @@ export function useGame(which = 'main', joinSide = null) {
     newGame: (options) => call('/game/new', options ?? {}),
     undo: () => call('/game/undo', {}),
     promote: (pieceType) => call('/game/promote', { coord: game.pending_promotion, piece_type: pieceType }),
+    askHint,
+    // Online team games: a message to your teammate, maybe with a move you suggest
+    say: (text, move) => call('/game/say', { text, move }),
     // Between online players: offer a draw or ask to take a move back, and answer one
     offer: (kind) => call('/game/offer', { kind }),
     answer: (yes) => call('/game/answer', { accept: yes }),

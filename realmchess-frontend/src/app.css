@@ -179,6 +179,20 @@
   min-width: 0;
 }
 
+.banner-hint {
+  padding: 10px 14px;
+  border: 1px solid var(--suggest);
+  border-radius: var(--r-control);
+  background: rgba(79, 195, 247, 0.12);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.button-hint {
+  width: 100%;
+  border-color: var(--suggest);
+}
+
 .banner-error {
   padding: 10px 14px;
   border: 1px solid #7a2a2a;
@@ -2265,4 +2279,59 @@ legend {
       font-size: 13.5px;
     }
   }
+}
+
+/* ---------- team messages (online team games) ---------- */
+
+.team-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.team-chat-box {
+  max-height: 150px;
+  min-height: 56px;
+  padding: 8px 12px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.team-chat-box p + p {
+  margin-top: 4px;
+}
+
+.team-chat-box .is-mine {
+  color: var(--muted);
+}
+
+.team-chat-move {
+  color: var(--suggest);
+}
+
+.team-chat-empty,
+.team-chat-tip {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.team-chat-form {
+  display: flex;
+  gap: 8px;
+}
+
+.team-chat-form input {
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-control);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
 }

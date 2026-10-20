@@ -37,7 +37,8 @@ class Room:
         self.permanent = False
         self.teams = False       # two players a side, taking turns with the army
         # Team games online: what teammates said to each other, oldest first. Each is
-        # {"id", "seat", "text", "move": {"from", "to"} or None, "version": the position it was about}
+        # {"id", "seat", "text", "move": {"from", "to", "piece"} or None, "version": the position
+        # it was about}
         self.chat = []
         self._said = 0
         self._now = now
@@ -188,7 +189,7 @@ class Room:
                 if (piece is None or getattr(piece, "color", None) != seat[:5] or
                         game.current_player != seat[:5] or to_coord not in game.get_legal_moves(from_coord)):
                     raise ValueError("That move cannot be played now")
-                move = {"from": from_coord, "to": to_coord}
+                move = {"from": from_coord, "to": to_coord, "piece": type(piece).__name__}
             if not text and move is None:
                 raise ValueError("Say something, or suggest a move")
             self._said += 1

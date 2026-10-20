@@ -66,6 +66,15 @@ export function layersOf(boardSize) {
 
 const squareName = ([x, y]) => `${FILES[x]}${y + 1}`
 
+// A suggested move in words, for the board as it is now: "Knight g1 to f3", and the layer
+// it lands on when that is not the one it leaves: "Pawn b2 to b4, down to the Ground"
+export function describeMove(board, { from, to, piece: type }) {
+  const piece = parsePiece(board[keyOf(from)])
+  const name = type ?? piece?.type ?? 'Piece'
+  const layer = to[2] === from[2] ? '' : `, ${to[2] > from[2] ? 'up' : 'down'} to the ${layerOf(to[2])?.name ?? ''}`
+  return `${name} ${squareName(from)} to ${squareName(to)}${layer}`
+}
+
 // What notation writes before the destination to say which piece moved. Normally nothing
 // (a capturing pawn always names its file). When another piece of the same kind could have
 // made the move, the shortest of these that tells them apart: file, rank, square, or the

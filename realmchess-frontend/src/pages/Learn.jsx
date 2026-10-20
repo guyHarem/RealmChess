@@ -10,8 +10,8 @@ import { useGame } from '../lib/useGame.js'
 import course from '../lessons.json'
 
 const LESSONS = course.lessons
-const BOARD = course.board
-const BOARD_LAYERS = layersOf(BOARD)
+// Most lessons share one small board; a lesson can bring its own ("board" in lessons.json)
+const boardOf = (lesson) => lesson.board ?? course.board
 const loadDone = () => loadIds(LESSON_PROGRESS)
 
 export default function Learn() {
@@ -31,16 +31,20 @@ export default function Learn() {
   const step = lesson.steps[stepIndex]
   const lastStep = stepIndex === lesson.steps.length - 1
   const lastLesson = lessonIndex === LESSONS.length - 1
-  const board = game?.board_size?.size === BOARD.size ? game.board : {}
+  const lessonBoard = boardOf(lesson)
+  const lessonLayers = layersOf(lessonBoard)
+  const showing = game?.board_size
+  const board =
+    showing?.size === lessonBoard.size && showing.z_min === lessonBoard.z_min && showing.z_max === lessonBoard.z_max ? game.board : {}
 
   // Put the step's position on the practice board
   const lay = useCallback(
-    (which) => {
+    (which, size) => {
       setSolved(false)
       setRevealed(false)
       setNudge(null)
       setActiveLayer(which.layer)
-      setup({ ...BOARD, rocks: false, current_player: 'white', pieces: which.pieces })
+      setup({ ...size, rocks: false, current_player: 'white', pieces: which.pieces })
     },
     // setup is recreated every render but always talks to the same practice game
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -48,7 +52,7 @@ export default function Learn() {
   )
 
   useEffect(() => {
-    lay(LESSONS[lessonIndex].steps[stepIndex])
+    lay(LESSONS[lessonIndex].steps[stepIndex], boardOf(LESSONS[lessonIndex]))
   }, [lessonIndex, stepIndex, lay])
 
   function open(index) {
@@ -159,7 +163,7 @@ export default function Learn() {
           <div className="lesson-board">
             <div className="lesson-stage">
               <div className="layer-picker" role="group" aria-label="Current layer">
-              {LAYERS.filter((layer) => BOARD_LAYERS.includes(layer.z)).map((layer) => (
+              {LAYERS.filter((layer) => lessonLayers.includes(layer.z)).map((layer) => (
                 <button
                   key={layer.z}
                   type="button"
@@ -176,8 +180,8 @@ export default function Learn() {
               <div className="board-frame">
                 <CubeBoard
                   board={board}
-                  size={BOARD.size}
-                  layers={BOARD_LAYERS}
+                  size={lessonBoard.size}
+                  layers={lessonLayers}
                   activeLayer={activeLayer}
                   selected={selected}
                   legalMoves={legalMoves}
@@ -191,7 +195,7 @@ export default function Learn() {
               <h2>{layerOf(activeLayer).name}, seen from above</h2>
               <LayerMap
                 board={board}
-                size={BOARD.size}
+                size={lessonBoard.size}
                 z={activeLayer}
                 side="white"
                 selected={selected}
@@ -226,7 +230,7 @@ export default function Learn() {
             <button type="button" className="button" disabled={solved} onClick={showMe}>
               Show me
             </button>
-            <button type="button" className="button" onClick={() => lay(step)}>
+            <button type="button" className="button" onClick={() => lay(step, lessonBoard)}>
               Reset board
             </button>
             {lastStep && lastLesson ? (

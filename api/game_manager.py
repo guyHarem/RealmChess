@@ -423,7 +423,9 @@ class GameManager:
         home_rank = 0 if color == "white" else size - 1
         pawn_rank = 1 if color == "white" else size - 2
         if isinstance(piece, Pawn):
-            start_layer = z == 0 or (size == 8 and (x, z) in EXTRA_PAWN_SQUARES)
+            # On the full board the pawns in Space and the Abyss start on the b and g files; a
+            # smaller board with all five layers (a lesson) lets any of them start there
+            start_layer = z == 0 or ((x, z) in EXTRA_PAWN_SQUARES if size == 8 else abs(z) == 2)
             piece.has_moved = not (y == pawn_rank and start_layer)
         elif isinstance(piece, King):
             piece.has_moved = size != 8 or (x, y, z) != (4, home_rank, 0)

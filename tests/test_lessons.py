@@ -22,8 +22,12 @@ class TestLessons(unittest.TestCase):
             for number, step in enumerate(lesson["steps"], 1):
                 yield f"{lesson['id']} step {number}", step
 
-    def setup(self, step):
-        board = self.data["board"]
+    def board_of(self, name):
+        lesson = next(lesson for lesson in self.data["lessons"] if name.startswith(lesson["id"] + " "))
+        return lesson.get("board", self.data["board"])
+
+    def setup(self, step, board=None):
+        board = board or self.data["board"]
         manager = GameManager()
         pieces = [{"coord": tuple(p["coord"]), "type": p["type"], "color": p.get("color")} for p in step["pieces"]]
         response = manager.setup_position(pieces, "white", rocks=False,
@@ -41,9 +45,10 @@ class TestLessons(unittest.TestCase):
     def test_every_task_is_a_legal_move_with_the_promised_effect(self):
         for name, step in self.steps():
             with self.subTest(name):
-                manager = self.setup(step)
+                board = self.board_of(name)
+                manager = self.setup(step, board)
                 from_coord, to_coord = tuple(step["from"]), tuple(step["to"])
-                self.assertIn(step["layer"], range(self.data["board"]["z_min"], self.data["board"]["z_max"] + 1))
+                self.assertIn(step["layer"], range(board["z_min"], board["z_max"] + 1))
                 self.assertEqual(from_coord[2], step["layer"], "the lesson should open on the layer of its piece")
 
                 legal = manager.get_legal_moves(from_coord)["legal_moves"]

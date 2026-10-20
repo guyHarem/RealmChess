@@ -207,12 +207,12 @@ export function portalCells(portals) {
   return cells
 }
 
-export const CLASSIC_DYNAMITE = [[3, 2, 1], [4, 2, -1], [3, 5, 1], [4, 5, -1]]
-export const CLASSIC_CLOUDS = [[2, 3, 2], [5, 3, 1], [2, 4, 2], [5, 4, 1]]
+export const CLASSIC_DYNAMITE = [[4, 3, 1], [1, 3, -1], [4, 4, 1], [1, 4, -1]]
+export const CLASSIC_CLOUDS = [[6, 2, 1], [7, 3, 2], [6, 5, 1], [7, 4, 2]]
 
 // The classic layout, for the setup page's picture (the server holds the real one)
 export const CLASSIC_PORTALS = [
-  [[0, 3, 1], [7, 4, -1]],
-  [[0, 4, 1], [7, 3, -1]],
+  [[3, 3, 1], [5, 3, -1]],
+  [[3, 4, 1], [5, 4, -1]],
 ]
 

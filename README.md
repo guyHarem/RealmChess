@@ -72,16 +72,16 @@ Abyss (on b and g, the files clear of the Abyss rocks): 24 pieces a side.
 sideways together with one layer up or down it cannot step, but it can capture there, so a
 queen or bishop cannot check it from the next cell without risk.
 
-**Portals (optional):** pairs of linked cells, switched on at setup: **Classic** (Sky a4 with
-Dungeon h5, and its mirror Sky a5 with Dungeon h4; nothing reaches them on the first move) or **Shuffle** (two random pairs off the Ground
+**Portals (optional):** pairs of linked cells, switched on at setup: **Classic** (Sky d4 with
+Dungeon f4, and its mirror Sky d5 with Dungeon f5) or **Shuffle** (two random pairs off the Ground
 in the middle ranks, mirrored for the two sides, never reachable on the first move). A piece that ends its move on an empty portal
 comes out on the other cell of its pair, capturing an enemy there; it may not land on its own
 piece. A piece standing on a portal plugs it: moving there just captures it. Sliding pieces and
 double steps cannot pass over an empty portal. Attacks go through portals the same way, so a
 portal can give check. Notation marks a trip with ⊙ (`R⊙h5↓2`).
 
-**Dynamite (optional):** charges on cells, switched on at setup: **Classic** (Sky d3 and Dungeon
-e3, mirrored to Sky d6 and Dungeon e6) or **Shuffle** (two random charges, mirrored). A piece
+**Dynamite (optional):** charges on cells, switched on at setup: **Classic** (Sky e4 and Dungeon
+b4, mirrored to Sky e5 and Dungeon b5) or **Shuffle** (two random charges, mirrored). A piece
 that ends its move on dynamite sets it off: every piece in the 3×3×3 cube around it (its own
 layer and the ones above and below) is removed, the mover too, but kings survive. Rocks there
 are destroyed and other dynamite there goes off as well; the board stays whole. Passing over
@@ -89,10 +89,16 @@ dynamite does nothing, and a pawn can step onto it but not capture onto it. A mo
 would leave your king in check is not allowed. Notation marks a blast with ✸ (`Rc3✸`).
 
 **Clouds (optional):** shelter cells in Space and the Sky, switched on at setup: **Classic**
-(Space c4 and Sky f4, mirrored to Space c5 and Sky f5) or **Shuffle** (two random clouds,
+(Sky g3 and Space h4, mirrored to Sky g6 and Space h5) or **Shuffle** (two random clouds,
 mirrored). A piece inside a cloud can't be captured or blown up by dynamite, but it can't
 capture or give check either; its attacks don't count. Kings can't enter a cloud, and sliding
 pieces and double steps can't pass through one, empty or not.
+
+The classic places of portals, dynamite and clouds were chosen together by self-play
+(`tools/tune_layouts.py`): of 25 mirrored layouts that nothing can use on the first move, the
+classic one brought all three into play most evenly over 200 computer games (2.0 portal trips,
+1.4 blasts and 1.4 cloud entries a game, first used around move 11), with White scoring 48% and
+games as long as without them.
 
 **Square colors:** the checkered pattern shifts by one square on every other layer, so a bishop
 keeps its color when it changes layer. The top-down view shows chess coordinates (a-h, 1-8).
@@ -438,11 +444,8 @@ This project is built with a learning-first approach:
 
 ## Next Steps
 
-1. Tune every special-cell layout together with self-play (the classic portals, dynamite and
-   clouds are stand-ins): nothing triggered on the first move, and special cells that come into
-   play within a few moves
-2. Get real players: share the link, try 2 against 2, and see what confuses newcomers
-3. Later, once people play: accounts, ratings and finding an opponent; games that survive a
+1. Get real players: share the link, try 2 against 2, and see what confuses newcomers
+2. Later, once people play: accounts, ratings and finding an opponent; games that survive a
    crash (needs storage that outlives the server, which costs extra on Render)
 
 ---

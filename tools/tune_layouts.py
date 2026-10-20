@@ -175,6 +175,20 @@ def match(args):
             print(f"{name}: {json.dumps(summary(batch))}", flush=True)
 
 
+def compare(args):
+    """Several screened layouts (by rank) and the game without special cells, args.games each"""
+    with open(args.layout, encoding="utf-8") as f:
+        rows = json.load(f)
+    runs = [("none", None)] + [(f"rank {pick}", rows[pick]["layout"]) for pick in args.picks]
+    with multiprocessing.Pool() as pool:
+        for name, layout in runs:
+            started = time.perf_counter()
+            s = summary(pool.map(play_one, [(layout, 7000 + game, args.level) for game in range(args.games)]))
+            if layout:
+                s["fitness"] = fitness(s)
+            print(f"{name} ({time.perf_counter() - started:.0f}s): {json.dumps(s)}", flush=True)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -189,8 +203,13 @@ def main():
     command.add_argument("--pick", type=int, default=0)
     command.add_argument("--games", type=int, default=200)
     command.add_argument("--level", default="medium")
+    command = commands.add_parser("compare")
+    command.add_argument("picks", type=int, nargs="+", help="ranks in the screened list (0 is the best)")
+    command.add_argument("--layout", default=os.path.join(DATA, "layouts.json"))
+    command.add_argument("--games", type=int, default=200)
+    command.add_argument("--level", default="medium")
     args = parser.parse_args()
-    {"screen": screen, "match": match}[args.command](args)
+    {"screen": screen, "match": match, "compare": compare}[args.command](args)
 
 
 if __name__ == "__main__":

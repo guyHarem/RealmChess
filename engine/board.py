@@ -7,11 +7,15 @@ ARMY_SIZE = 24   # pieces each side starts with on the full board
 
 # Portal layouts are mirror images for the two sides: flipping the ranks (rank 1 <-> rank 8)
 # turns one pair into the other, so neither side starts closer to a portal.
-# Classic: Sky a4 <-> Dungeon h5, and its mirror Sky a5 <-> Dungeon h4. Nothing reaches them on
-# the first move: with portals in Space on the fourth rank a pawn's opening double step could,
-# and every self-play game opened with that trip; further out (Space a3) they were hardly used.
-# A stand-in until dynamite and clouds exist: then all the layouts are tuned together.
-CLASSIC_PORTALS = [((0, 3, 1), (7, 4, -1)), ((0, 4, 1), (7, 3, -1))]
+# The classic layouts of the special cells were chosen together by self-play
+# (tools/tune_layouts.py, October 2026): of 25 mirrored layouts that nothing can use on the
+# first move, this one brought all three kinds into play most evenly (over 200 games: 2.0
+# portal trips, 1.4 blasts and 1.4 cloud entries a game, first used around move 11) with
+# White scoring 48% and games as long as without special cells.
+#
+# Classic portals: Sky d4 <-> Dungeon f4, and its mirror Sky d5 <-> Dungeon f5, across the
+# middle of the board.
+CLASSIC_PORTALS = [((3, 3, 1), (5, 3, -1)), ((3, 4, 1), (5, 4, -1))]
 
 
 def mirrored(cell, size=8):
@@ -19,14 +23,13 @@ def mirrored(cell, size=8):
     return (x, size - 1 - y, z)
 
 
-# Classic dynamite: Sky d3 and Dungeon e3, mirrored to Sky d6 and Dungeon e6. A stand-in like
-# the classic portals, until all the special cells are tuned together.
-CLASSIC_DYNAMITE = [(3, 2, 1), (4, 2, -1), (3, 5, 1), (4, 5, -1)]
+# Classic dynamite: Sky e4 and Dungeon b4, mirrored to Sky e5 and Dungeon b5 (each pair close
+# enough to set each other off).
+CLASSIC_DYNAMITE = [(4, 3, 1), (1, 3, -1), (4, 4, 1), (1, 4, -1)]
 
 
-# Classic clouds: Space c4 and Sky f4, mirrored to Space c5 and Sky f5: two banks of cloud in
-# the middle of the upper layers. A stand-in until all the special cells are tuned together.
-CLASSIC_CLOUDS = [(2, 3, 2), (5, 3, 1), (2, 4, 2), (5, 4, 1)]
+# Classic clouds: Sky g3 and Space h4, mirrored to Sky g6 and Space h5, on the kings' side.
+CLASSIC_CLOUDS = [(6, 2, 1), (7, 3, 2), (6, 5, 1), (7, 4, 2)]
 
 
 def shuffled_clouds(rng, board, count=2):
